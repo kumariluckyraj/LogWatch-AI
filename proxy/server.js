@@ -47,8 +47,8 @@ const getConfig = () => {
   } catch {
     return {
       mode: "stable",
-      stable_url: "http://127.0.0.1:5001",
-      test_url: "http://127.0.0.1:5002",
+      stable_url: "https://logwatch-stable.onrender.com",
+      test_url: "https://logwatch-test.onrender.com",
       canary_percent: 10,
     };
   }
