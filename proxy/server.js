@@ -58,6 +58,15 @@ const saveConfig = (config) => {
   fs.writeFileSync("./config.json", JSON.stringify(config, null, 2));
 };
 
+// ================= PATCH VALIDATION =================
+function isValidPatch(patch) {
+  if (!patch?.file || !patch?.replacement) return false;
+  if (typeof patch.replacement !== "string") return false;
+  if (patch.replacement.includes("TODO")) return false;
+  if (patch.replacement.trim().length < 20) return false;
+  return true;
+}
+
 // ================= ROUTES =================
 
 // stats
@@ -133,7 +142,7 @@ app.post("/api/debug/ingest", async (req, res) => {
   res.json({ success: true, ingested: normalized.length });
 });
 
-// ================= ANALYZE (FIXED - REAL AGENT FLOW) =================
+// ================= ANALYZE (SAFE PATCH FLOW) =================
 app.post("/api/analyze", async (req, res) => {
   try {
     const stats = errorTracker.getStats();
@@ -159,11 +168,21 @@ app.post("/api/analyze", async (req, res) => {
       console.error("[PATCH AGENT ERROR]", err.message);
     }
 
-    // ================= 3. APPLY PATCH (ONLY IF EXISTS) =================
+    // ================= 3. APPLY PATCH SAFELY =================
     if (patch?.file) {
       console.log("🧠 Patch generated for:", patch.file);
 
-      // SAFETY STEP
+      // VALIDATE PATCH (IMPORTANT FIX)
+      if (!isValidPatch(patch)) {
+        console.log("❌ Invalid patch rejected");
+        return res.json({
+          success: false,
+          error: "AI returned invalid patch",
+          data: analysis,
+        });
+      }
+
+      // SAFETY CHECKPOINT
       createCheckpoint();
 
       // APPLY PATCH
@@ -176,10 +195,12 @@ app.post("/api/analyze", async (req, res) => {
     res.json({
       success: true,
       data: analysis,
-      patch: patch ? {
-        file: patch.file,
-        applied: !!patch.file
-      } : null,
+      patch: patch
+        ? {
+            file: patch.file,
+            applied: true,
+          }
+        : null,
     });
 
   } catch (err) {
@@ -255,7 +276,7 @@ app.use((req, res) => {
       }
     }
 
-    // trigger agent (your watchdog system)
+    // trigger agent
     try {
       await triggerAgent.observe({
         statusCode: res.statusCode,
