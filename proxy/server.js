@@ -10,7 +10,9 @@ const AutoRollback = require("./auto-rollback");
 
 const { ingestLogs } = require("./rag/ingest");
 const { retrieveRelevantLogs } = require("./rag/retriever");
-
+const { runPatchAgent } = require("./agents/patch-agent");
+const { applyPatch } = require("./agents/patch-executor");
+const { createCheckpoint } = require("./utils/git-checkpoint");
 const TriggerAgent = require("./agents/trigger-agent");
 const { runAnalysisAgent } = require("./agents/analysis-agent");
 const { getAIState } = require("./agents/ai-state");
@@ -139,15 +141,45 @@ app.post("/api/analyze", async (req, res) => {
       stats.errorRatePercent || stats.errorRate || 0
     );
 
-    // 👉 RUN REAL AI AGENT SYSTEM
-    const result = await runAnalysisAgent({
+    // ================= 1. ANALYSIS =================
+    const analysis = await runAnalysisAgent({
       errorRate,
       stats,
     });
 
+    // ================= 2. PATCH GENERATION =================
+    let patch = null;
+
+    try {
+      patch = await runPatchAgent({
+        analysis,
+        stats,
+      });
+    } catch (err) {
+      console.error("[PATCH AGENT ERROR]", err.message);
+    }
+
+    // ================= 3. APPLY PATCH (ONLY IF EXISTS) =================
+    if (patch?.file) {
+      console.log("🧠 Patch generated for:", patch.file);
+
+      // SAFETY STEP
+      createCheckpoint();
+
+      // APPLY PATCH
+      applyPatch(patch);
+
+      console.log("🩹 Patch applied successfully");
+    }
+
+    // ================= FINAL RESPONSE =================
     res.json({
       success: true,
-      data: result,
+      data: analysis,
+      patch: patch ? {
+        file: patch.file,
+        applied: !!patch.file
+      } : null,
     });
 
   } catch (err) {
