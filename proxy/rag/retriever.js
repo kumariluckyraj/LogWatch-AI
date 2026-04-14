@@ -12,7 +12,7 @@ async function retrieveRelevantLogs(query) {
 
     const index = await getIndex();
 
-    // ✅ v7 query signature
+    //  v7 query signature
     const result = await index.query({
       vector: Array.from(embedding),
       topK: 5,

@@ -9,12 +9,12 @@ async function getIndex() {
     apiKey: process.env.PINECONE_API_KEY,
   });
 
-  // ✅ describe first to confirm index exists and get dimension
+ 
   const indexName = process.env.PINECONE_INDEX;
   console.log("🔌 Connecting to Pinecone index:", indexName);
 
   index = pc.index(indexName);
-  console.log("✅ Pinecone index ready");
+  console.log("Pinecone index ready");
   return index;
 }
 

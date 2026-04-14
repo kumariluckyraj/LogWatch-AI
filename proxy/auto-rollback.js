@@ -3,107 +3,139 @@ const fs = require("fs");
 class AutoRollback {
   constructor(errorThreshold = 20) {
     this.errorThreshold = errorThreshold;
-    this.rollbackHistory = [];
+    this.history = []; // ✅ unified naming
+    this.maxHistory = 50; // ✅ prevent memory leak
   }
 
   checkAndRollback(currentErrorRatePercent) {
-    const errorRate = parseFloat(currentErrorRatePercent);
+    const errorRate = parseFloat(currentErrorRatePercent) || 0;
 
-    if (errorRate > this.errorThreshold) {
-      console.log(`\n[ALERT] ERROR RATE ${errorRate}% EXCEEDS THRESHOLD ${this.errorThreshold}%`);
-      console.log("[ACTION] INITIATING AUTO-ROLLBACK TO STABLE...\n");
-
-      try {
-        const configData = fs.readFileSync("./config.json", "utf8");
-        const config = JSON.parse(configData);
-
-        const previousMode = config.mode;
-
-        if (previousMode !== "stable") {
-          config.mode = "stable";
-
-          fs.writeFileSync("./config.json", JSON.stringify(config, null, 2), "utf8");
-
-          const rollbackEvent = {
-            timestamp: new Date().toISOString(),
-            previousMode: previousMode,
-            newMode: "stable",
-            errorRate: errorRate,
-            threshold: this.errorThreshold,
-          };
-
-          this.rollbackHistory.push(rollbackEvent);
-
-          console.log(`[SUCCESS] ROLLBACK COMPLETED`);
-          console.log(`[INFO] Previous mode: ${previousMode}`);
-          console.log(`[INFO] New mode: stable`);
-          console.log(`[INFO] Error rate was: ${errorRate}%\n`);
-
-          return {
-            success: true,
-            rolled: true,
-            previousMode: previousMode,
-            newMode: "stable",
-            errorRate: errorRate,
-            timestamp: rollbackEvent.timestamp,
-          };
-        } else {
-          return {
-            success: true,
-            rolled: false,
-            message: "Already in stable mode, no rollback needed",
-            errorRate: errorRate,
-          };
-        }
-      } catch (err) {
-        console.error("[ERROR] ROLLBACK FAILED:", err.message);
-        return {
-          success: false,
-          error: err.message,
-        };
-      }
+    // ❌ No rollback needed
+    if (errorRate <= this.errorThreshold) {
+      return {
+        success: true,
+        rolled: false,
+        errorRate,
+        timestamp: new Date().toISOString(),
+      };
     }
 
-    return {
-      success: true,
-      rolled: false,
-      errorRate: errorRate,
-      timestamp: new Date().toISOString(),
-    };
+    console.log(`\n🚨 ERROR RATE ${errorRate}% > ${this.errorThreshold}%`);
+    console.log("⚡ INITIATING AUTO-ROLLBACK...\n");
+
+    try {
+      const configData = fs.readFileSync("./config.json", "utf8");
+      const config = JSON.parse(configData);
+
+      const previousMode = config.mode;
+
+      // 🛑 Already stable → skip
+      if (previousMode === "stable") {
+        console.log("ℹ️ Already in stable mode, skipping rollback\n");
+
+        return {
+          success: true,
+          rolled: false,
+          message: "Already in stable mode",
+          errorRate,
+        };
+      }
+
+      // 🔁 Perform rollback
+      config.mode = "stable";
+      fs.writeFileSync("./config.json", JSON.stringify(config, null, 2), "utf8");
+
+      const rollbackEvent = {
+        timestamp: new Date().toISOString(),
+        previousMode,
+        newMode: "stable",
+        errorRate,
+        threshold: this.errorThreshold,
+      };
+
+      // ✅ Save history
+      this.history.push(rollbackEvent);
+
+      // ✅ Limit history size
+      if (this.history.length > this.maxHistory) {
+        this.history.shift();
+      }
+
+      console.log("✅ ROLLBACK COMPLETED");
+      console.log(`➡️ ${previousMode} → stable`);
+      console.log(`📊 Error Rate: ${errorRate}%\n`);
+
+      return {
+        success: true,
+        rolled: true,
+        ...rollbackEvent,
+      };
+
+    } catch (err) {
+      console.error("❌ ROLLBACK FAILED:", err.message);
+
+      return {
+        success: false,
+        error: err.message,
+      };
+    }
   }
 
+  // 📊 Used by /api/rollback-history
   getRollbackHistory() {
-    return this.rollbackHistory;
+    return this.history;
   }
 
+  // 📈 Extra stats (optional API)
   getStats() {
     return {
       threshold: this.errorThreshold,
-      rollbackCount: this.rollbackHistory.length,
-      lastRollback: this.rollbackHistory.length > 0 ? this.rollbackHistory[this.rollbackHistory.length - 1] : null,
-      history: this.rollbackHistory,
+      rollbackCount: this.history.length,
+      lastRollback:
+        this.history.length > 0
+          ? this.history[this.history.length - 1]
+          : null,
+      history: this.history,
     };
   }
 
+  // 🔧 Manual rollback (for testing / admin)
   manualRollback() {
     try {
       const configData = fs.readFileSync("./config.json", "utf8");
       const config = JSON.parse(configData);
 
       const previousMode = config.mode;
-      config.mode = "stable";
 
+      if (previousMode === "stable") {
+        return {
+          success: true,
+          message: "Already in stable mode",
+        };
+      }
+
+      config.mode = "stable";
       fs.writeFileSync("./config.json", JSON.stringify(config, null, 2), "utf8");
 
-      console.log(`[ACTION] MANUAL ROLLBACK: ${previousMode} to stable`);
+      const event = {
+        timestamp: new Date().toISOString(),
+        previousMode,
+        newMode: "stable",
+        manual: true,
+      };
+
+      this.history.push(event);
+
+      console.log(`🔧 MANUAL ROLLBACK: ${previousMode} → stable`);
 
       return {
         success: true,
-        previousMode: previousMode,
-        newMode: "stable",
+        ...event,
       };
+
     } catch (err) {
-      console.error("[ERROR] Manual rollback failed:", err.message);
+      console.error("❌ Manual rollback failed:", err.message);
+
       return {
         success: false,
         error: err.message,

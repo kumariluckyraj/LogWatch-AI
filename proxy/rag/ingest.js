@@ -36,7 +36,7 @@ async function ingestLogs(logs) {
 
     const index = await getIndex();
 
-    await index.upsert({ records: vectors }); // ✅ v7 syntax
+    await index.upsert({ records: vectors }); //  v7 syntax
     console.log("✅ Upserted:", vectors.length);
 
   } catch (err) {

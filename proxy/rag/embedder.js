@@ -12,7 +12,7 @@ async function getEmbedding(text) {
 
     let embedding = res;
 
-    // ✅ FIX: flatten nested array
+   
     if (Array.isArray(res) && Array.isArray(res[0])) {
       embedding = res[0];
     }
@@ -22,7 +22,7 @@ async function getEmbedding(text) {
       return null;
     }
 
-    console.log("🧠 Embedding length:", embedding.length);
+    console.log(" Embedding length:", embedding.length);
 
     return embedding;
   } catch (err) {

@@ -7,6 +7,8 @@
   min-height: 100vh;
 }
 
+
+
 .dashboard-header {
   text-align: center;
   margin-bottom: 40px;
@@ -498,6 +500,8 @@
   background-color: #fef3c7;
   color: #78350f;
 }
+
+
 
 .health-status.poor,
 .risk-level.high {

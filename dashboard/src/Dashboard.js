@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Analytics from './Analytics';
-import AIAnalyzer from './AIAnalyzer';
-import LogScene from './components/three/LogScene';
 import LogAnalysis from './LogAnalysis';
 
 // ── Cursor-reactive 3D background ────────────────────────────────────────
@@ -218,6 +216,313 @@ function SectionHeader({ title, tag }) {
   );
 }
 
+function AIAnalysisPanel({ stats }) {
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [error, setError] = useState(null);
+  const [lastRun, setLastRun] = useState(null);
+
+  const runAnalysis = async () => {
+    console.log("🔥 BUTTON CLICKED");
+    setAnalyzing(true);
+    setError(null);
+    setAnalysisResult(null);
+
+    try {
+      const res = await fetch('http://127.0.0.1:4000/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+
+      const json = await res.json();
+      console.log("ANALYSIS RESPONSE:", json);
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || `HTTP ${res.status}`);
+      }
+
+      setAnalysisResult(json);
+      setLastRun(new Date());
+    } catch (err) {
+      setError(err.message);
+      console.error(err);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+  // Pull data out of { success, data } envelope
+  const data =
+    analysisResult?.success ? analysisResult.data : null;
+  // Severity badge style
+  const sevStyle = (sev) => {
+    const s = (sev || '').toUpperCase();
+    if (s === 'HIGH') return { color: '#ff3355', border: '1px solid rgba(255,51,85,0.35)', background: 'rgba(255,51,85,0.06)' };
+    if (s === 'MEDIUM') return { color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.06)' };
+    return { color: '#00dc9b', border: '1px solid rgba(0,220,155,0.35)', background: 'rgba(0,220,155,0.06)' };
+  };
+
+  const riskStyle = (risk) => {
+    const r = (risk || '').toUpperCase();
+    if (r === 'HIGH') return { color: '#ff3355', border: '1px solid rgba(255,51,85,0.4)', background: 'rgba(255,51,85,0.07)' };
+    if (r === 'MEDIUM') return { color: '#f59e0b', border: '1px solid rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.07)' };
+    return { color: '#00dc9b', border: '1px solid rgba(0,220,155,0.4)', background: 'rgba(0,220,155,0.07)' };
+  };
+
+  return (
+    <div style={styles.section}>
+      <SectionHeader title="AI Analysis Engine" tag="GPT-AGENT" />
+
+      {/* Stats snapshot */}
+      {stats && (
+        <div style={styles.analysisStatsRow}>
+          {[
+            { label: 'TOTAL REQ', value: stats.totalRequests, color: '#00dc9b' },
+            { label: 'ERRORS', value: stats.totalErrors, color: '#ff3355' },
+            { label: 'ERROR RATE', value: stats.errorRatePercent, color: '#f59e0b' },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={styles.analysisStat}>
+              <span style={{ color: '#4a9888', fontSize: 10, letterSpacing: 2, fontFamily: "'Orbitron', monospace" }}>{label}</span>
+              <span style={{ color, fontSize: 18, fontFamily: "'Orbitron', monospace", fontWeight: 900 }}>{value ?? '—'}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Button */}
+      <button
+        style={{ ...styles.analyzeBtn, ...(analyzing ? styles.analyzeBtnLoading : {}) }}
+        onClick={runAnalysis}
+        disabled={analyzing}
+        onMouseEnter={e => { if (!analyzing) e.currentTarget.style.boxShadow = '0 0 40px #00dc9b55, inset 0 0 30px #00dc9b0d'; }}
+        onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 0 20px #00dc9b22'; }}
+      >
+        {analyzing ? (
+          <><div style={styles.btnSpinner} /><span style={{ fontFamily: "'Orbitron', monospace", letterSpacing: 2 }}>ANALYZING...</span></>
+        ) : (
+          <><span style={{ fontSize: 18 }}>⬡</span><span style={{ fontFamily: "'Orbitron', monospace", letterSpacing: 2 }}>RUN AI ANALYSIS</span></>
+        )}
+      </button>
+
+      {lastRun && (
+        <div style={{ fontSize: 10, color: '#3a8878', letterSpacing: 2, marginBottom: 16, fontFamily: 'monospace' }}>
+          LAST_RUN: {lastRun.toLocaleTimeString()}
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div style={styles.analysisError}>
+          <span style={{ color: '#ff3355', marginRight: 8 }}>⚠</span>
+          ANALYSIS_FAILED: {error}
+        </div>
+      )}
+
+      {/* Results */}
+      {data && (
+        <div style={styles.analysisResultWrap}>
+          <div style={styles.analysisResultHeader}>
+            <span style={{ color: '#00dc9b' }}>✓</span>
+            ANALYSIS COMPLETE
+            <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, #00dc9b22, transparent)', marginLeft: 16 }} />
+          </div>
+
+          <div style={styles.analysisGrid}>
+
+            {/* RISK */}
+            {data.risk && (
+              <div style={styles.analysisCard}>
+                <div style={styles.analysisCardLabel}>RISK LEVEL</div>
+                <span style={{
+                  ...riskStyle(data.risk),
+                  display: 'inline-block', marginTop: 6,
+                  padding: '3px 12px', fontSize: 12,
+                  fontFamily: "'Orbitron', monospace", letterSpacing: 2,
+                }}>
+                  {data.risk.toUpperCase()}
+                </span>
+              </div>
+            )}
+
+            {/* ACTIONS */}
+            {Array.isArray(data.actions) && data.actions.length > 0 && (
+              <div style={styles.analysisCard}>
+                <div style={styles.analysisCardLabel}>ACTIONS</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                  {data.actions.map((action, i) => (
+                    <span key={i} style={{
+                      padding: '4px 12px', fontSize: 10,
+                      fontFamily: 'monospace', letterSpacing: 1,
+                      border: '1px solid rgba(0,180,255,0.3)',
+                      color: '#00b4ff', background: 'rgba(0,180,255,0.06)',
+                    }}>
+                      {action}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ERRORS TABLE — full width */}
+            {/* ERRORS CARDS — full width */}
+            {/* ERROR BLOCKS (SRE STYLE) */}
+            {Array.isArray(data.errors) && data.errors.length > 0 && (
+              <div style={{ ...styles.analysisCard, gridColumn: '1 / -1' }}>
+                <div style={styles.analysisCardLabel}>
+                  ERRORS DETECTED ({data.errors.length})
+                </div>
+
+                <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
+                  {data.errors.map((err, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        border: '1px solid rgba(0,220,155,0.15)',
+                        borderRadius: 10,
+                        background: 'rgba(0, 0, 0, 0.35)',
+                        padding: 16,
+                        boxShadow: '0 0 30px rgba(0,220,155,0.05)',
+                      }}
+                    >
+
+                      {/* HEADER */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+
+                          {/* INDEX */}
+                          <div style={{
+                            fontFamily: "'Orbitron', monospace",
+                            color: '#00dc9b',
+                            fontSize: 14
+                          }}>
+                            {String(i + 1).padStart(2, '0')}
+                          </div>
+
+                          {/* TITLE */}
+                          <div style={{
+                            fontFamily: "'Orbitron', monospace",
+                            letterSpacing: 2,
+                            fontSize: 14,
+                            color: '#e5fff7'
+                          }}>
+                            ERROR {err.code}
+                          </div>
+                        </div>
+
+                        {/* SEVERITY BADGE */}
+                        <div style={{
+                          ...sevStyle(err.severity),
+                          padding: '4px 10px',
+                          fontSize: 10,
+                          letterSpacing: 1,
+                          borderRadius: 4,
+                          fontFamily: 'monospace'
+                        }}>
+                          {err.severity?.toUpperCase()}
+                        </div>
+                      </div>
+
+                      {/* META ROW (FREQUENCY + IMPACT) */}
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: 12,
+                        marginTop: 14
+                      }}>
+
+                        <div style={{
+                          border: '1px solid rgba(0,220,155,0.1)',
+                          padding: 10,
+                          borderRadius: 6
+                        }}>
+
+                        </div>
+
+                        <div style={{
+                          border: '1px solid rgba(0,220,155,0.1)',
+                          padding: 10,
+                          borderRadius: 6
+                        }}>
+
+                        </div>
+
+                      </div>
+
+                      {/* WHAT'S WRONG */}
+                      <div style={{
+                        marginTop: 14,
+                        border: '1px solid rgba(255, 51, 85, 0.25)',
+                        background: 'rgba(255, 51, 85, 0.05)',
+                        borderRadius: 6,
+                        padding: 12
+                      }}>
+                        <div style={{ fontSize: 10, color: '#ff3355', letterSpacing: 2 }}>
+                          WHAT'S WRONG
+                        </div>
+                        <div style={{ fontSize: 12, marginTop: 6, color: '#ffd6dc' }}>
+                          {err.cause ?? '—'}
+                        </div>
+                      </div>
+
+                      {/* HOW TO FIX */}
+                      <div style={{
+                        marginTop: 10,
+                        border: '1px solid rgba(0, 220, 155, 0.25)',
+                        background: 'rgba(0, 220, 155, 0.05)',
+                        borderRadius: 6,
+                        padding: 12
+                      }}>
+                        <div style={{ fontSize: 10, color: '#00dc9b', letterSpacing: 2 }}>
+                          HOW TO FIX
+                        </div>
+                        <div style={{ fontSize: 12, marginTop: 6, color: '#d6fff2' }}>
+                          {err.fix}
+                        </div>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* RECOMMENDATION — full width */}
+            {data.recommendation && (
+              <div style={{ ...styles.analysisCard, gridColumn: '1 / -1' }}>
+                <div style={styles.analysisCardLabel}>RECOMMENDATION</div>
+                <div style={styles.analysisSummaryText}>{data.recommendation}</div>
+              </div>
+            )}
+
+          </div>
+
+          {/* Raw JSON toggle */}
+          <RawJsonToggle data={analysisResult} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Raw JSON collapsible ──────────────────────────────────────────────────
+function RawJsonToggle({ data }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginTop: 16 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={styles.rawToggleBtn}
+      >
+        {open ? '▾' : '▸'} RAW JSON RESPONSE
+      </button>
+      {open && (
+        <pre style={styles.rawJson}>
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
@@ -227,7 +532,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
-  // ✅ ALL hooks declared before any early return
   const [serverStart] = useState(() => Date.now());
   const [now, setNow] = useState(Date.now());
 
@@ -262,13 +566,16 @@ const Dashboard = () => {
     return () => clearInterval(iv);
   }, []);
 
+  // Fixed changeMode — no nested duplicate definition
   const changeMode = async (mode) => {
     await fetch('http://127.0.0.1:4000/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode }),
     });
-    setConfig(c => ({ ...c, mode }));
+    const res = await fetch('http://127.0.0.1:4000/api/config');
+    const data = await res.json();
+    setConfig(data);
   };
 
   const manualRollback = async () => {
@@ -276,12 +583,10 @@ const Dashboard = () => {
     alert('Manual rollback triggered');
   };
 
-  // ✅ Uptime computed from local timer — never NaN
-  const uptimeMs  = now - serverStart;
+  const uptimeMs = now - serverStart;
   const uptimeMin = Math.floor(uptimeMs / 60000);
   const uptimeSec = Math.floor((uptimeMs % 60000) / 1000);
 
-  // ✅ Early return AFTER all hooks
   if (loading) return (
     <>
       <CursorBackground />
@@ -299,7 +604,6 @@ const Dashboard = () => {
     <>
       <style>{globalStyles}</style>
       <CursorBackground />
-      <LogScene logs={logs} />
 
       <div style={{ ...styles.shell, opacity: mounted ? 1 : 0, transition: 'opacity 0.8s ease' }}>
 
@@ -310,9 +614,6 @@ const Dashboard = () => {
             <LogAnalysis logs={logs} stats={stats} />
           </div>
         )}
-
-        {/* 2. AI ERROR ANALYZER */}
-        {logs.length > 0 && <AIAnalyzer logs={logs} stats={stats} />}
 
         {/* 3. CANARY DEPLOYMENT MATRIX (Header + Metrics) */}
         <header style={styles.header}>
@@ -335,25 +636,28 @@ const Dashboard = () => {
 
         {stats && (
           <div style={styles.metricsGrid}>
-            <MetricCard label="TOTAL REQUESTS" value={stats.totalRequests}  accent="#00dc9b" delay="0s"   icon="⬡" />
-            <MetricCard label="TOTAL ERRORS"   value={stats.totalErrors}    accent="#ff3355" delay="0.1s" icon="⚠" />
-            <MetricCard label="ERROR RATE"     value={stats.errorRatePercent} accent="#f59e0b" delay="0.2s" icon="%" />
-            <MetricCard label="UPTIME"         value={`${uptimeMin}m ${uptimeSec}s`} accent="#00b4ff" delay="0.3s" icon="◈" />
+            <MetricCard label="TOTAL REQUESTS" value={stats.totalRequests} accent="#00dc9b" delay="0s" icon="⬡" />
+            <MetricCard label="TOTAL ERRORS" value={stats.totalErrors} accent="#ff3355" delay="0.1s" icon="⚠" />
+            <MetricCard label="ERROR RATE" value={stats.errorRatePercent} accent="#f59e0b" delay="0.2s" icon="%" />
+            <MetricCard label="UPTIME" value={`${uptimeMin}m ${uptimeSec}s`} accent="#00b4ff" delay="0.3s" icon="◈" />
           </div>
         )}
 
-        {/* 4. ANALYTICS & INSIGHTS */}
+        {/* 4. ── AI ANALYSIS PANEL (NEW) ── */}
+        <AIAnalysisPanel stats={stats} />
+
+        {/* 5. ANALYTICS & INSIGHTS */}
         {logs.length > 0 && <Analytics logs={logs} stats={stats} />}
 
-        {/* 5. TRAFFIC MODE CONTROL */}
+        {/* 6. TRAFFIC MODE CONTROL */}
         {config && (
           <div style={styles.section}>
             <SectionHeader title="Traffic Mode Control" tag="LIVE" />
             <div style={styles.modeGrid}>
               {[
-                { key: 'stable', label: 'STABLE', sub: '90% canary',   icon: '✓',  color: '#00dc9b' },
-                { key: 'test',   label: 'TEST',   sub: '10% canary', icon: '⚡', color: '#f59e0b' },
-                { key: 'canary', label: 'CANARY', sub: '10% canary',  icon: '◈',  color: '#00b4ff' },
+                { key: 'stable', label: 'STABLE', sub: '90% traffic', icon: '✓', color: '#00dc9b' },
+                { key: 'test', label: 'TEST', sub: '100% canary', icon: '⚡', color: '#f59e0b' },
+                { key: 'canary', label: 'CANARY', sub: '10% canary', icon: '◈', color: '#00b4ff' },
               ].map(m => (
                 <button key={m.key} onClick={() => changeMode(m.key)} style={{
                   ...styles.modeBtn,
@@ -376,7 +680,7 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* 6. EMERGENCY ROLLBACK */}
+        {/* 7. EMERGENCY ROLLBACK */}
         <div style={styles.section}>
           <SectionHeader title="Emergency Rollback" />
           <button style={styles.rollbackBtn} onClick={manualRollback}
@@ -395,7 +699,7 @@ const Dashboard = () => {
             <SectionHeader title="Rollback History" tag={`${rollbackHistory.length} EVENTS`} />
             <div style={styles.tableWrap}>
               <table style={styles.table}>
-                <thead><tr>{['TIMESTAMP','FROM','TO','ERROR RATE','TRIGGER'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{['TIMESTAMP', 'FROM', 'TO', 'ERROR RATE', 'TRIGGER'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
                 <tbody>
                   {rollbackHistory.slice(-10).reverse().map((ev, i) => (
                     <tr key={i} style={styles.tr}>
@@ -412,13 +716,13 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* 7. RECENT REQUESTS */}
+        {/* 8. RECENT REQUESTS */}
         {logs.length > 0 && (
           <div style={styles.section}>
             <SectionHeader title="Recent Requests" tag="LAST 10" />
             <div style={styles.tableWrap}>
               <table style={styles.table}>
-                <thead><tr>{['TIME','METHOD','PATH','STATUS','BACKEND','DURATION'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{['TIME', 'METHOD', 'PATH', 'STATUS', 'BACKEND', 'DURATION'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
                 <tbody>
                   {logs.slice(-10).reverse().map((log, i) => (
                     <tr key={i} style={{ ...styles.tr, ...(log.statusCode >= 400 ? styles.trError : {}) }}>
@@ -438,13 +742,13 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* 8. FULL LOG STREAM */}
+        {/* 9. FULL LOG STREAM */}
         {logs.length > 0 && (
           <div style={styles.section}>
             <SectionHeader title="Full Log Stream" tag={`${logs.length} ENTRIES`} />
             <div style={{ ...styles.tableWrap, maxHeight: 340, overflowY: 'auto' }}>
               <table style={styles.table}>
-                <thead><tr>{['TIME','METHOD','PATH','STATUS','BACKEND','MS','IP','RESPONSE'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{['TIME', 'METHOD', 'PATH', 'STATUS', 'BACKEND', 'MS', 'IP', 'RESPONSE'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
                 <tbody>
                   {logs.map((log, i) => (
                     <tr key={i} style={{ ...styles.tr, ...(log.statusCode >= 400 ? styles.trError : {}) }}>
@@ -496,6 +800,10 @@ const globalStyles = `
   @keyframes glowPulse {
     0%, 100% { text-shadow: 0 0 30px #00dc9b, 0 0 60px #00dc9b55; }
     50%       { text-shadow: 0 0 50px #00dc9b, 0 0 100px #00dc9b88; }
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 `;
 
@@ -599,6 +907,86 @@ const styles = {
     fontFamily: "'Orbitron', monospace",
   },
   sectionLine: { flex: 1, height: 1, background: 'linear-gradient(90deg, #00dc9b10, transparent)' },
+
+  // AI Analysis specific
+  analysisStatsRow: {
+    display: 'flex', gap: 24, marginBottom: 20,
+    paddingBottom: 16, borderBottom: '1px solid rgba(0,220,155,0.06)',
+  },
+  analysisStat: {
+    display: 'flex', flexDirection: 'column', gap: 4,
+    padding: '10px 16px',
+    background: 'rgba(0,220,155,0.03)',
+    border: '1px solid rgba(0,220,155,0.08)',
+  },
+  analyzeBtn: {
+    display: 'flex', alignItems: 'center', gap: 12,
+    padding: '16px 32px', marginBottom: 12,
+    background: 'rgba(0,220,155,0.05)',
+    border: '1px solid #00dc9b44', color: '#00dc9b',
+    cursor: 'pointer', fontFamily: "'Share Tech Mono', monospace", fontSize: 14,
+    letterSpacing: 1, boxShadow: '0 0 20px #00dc9b22',
+    transition: 'box-shadow 0.2s ease',
+  },
+  analyzeBtnLoading: {
+    opacity: 0.7, cursor: 'not-allowed',
+    border: '1px solid #00dc9b22',
+  },
+  btnSpinner: {
+    width: 16, height: 16, borderRadius: '50%',
+    border: '2px solid #00dc9b22', borderTop: '2px solid #00dc9b',
+    animation: 'spin 0.7s linear infinite', flexShrink: 0,
+  },
+  analysisError: {
+    padding: '12px 16px', marginBottom: 16,
+    background: 'rgba(255,51,85,0.05)',
+    border: '1px solid rgba(255,51,85,0.2)',
+    color: '#ff3355', fontSize: 12, fontFamily: 'monospace',
+  },
+  analysisResultWrap: {
+    animation: 'slideIn 0.4s ease',
+    marginTop: 8,
+  },
+  analysisResultHeader: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    fontFamily: "'Orbitron', monospace", fontSize: 11,
+    color: '#00dc9b', letterSpacing: 2,
+    marginBottom: 16, paddingBottom: 10,
+    borderBottom: '1px solid rgba(0,220,155,0.08)',
+  },
+  analysisGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gap: 12,
+  },
+  analysisCard: {
+    padding: '14px 16px',
+    background: 'rgba(0,220,155,0.03)',
+    border: '1px solid rgba(0,220,155,0.1)',
+  },
+  analysisCardLabel: {
+    fontSize: 9, letterSpacing: 2, color: '#4a9888',
+    fontFamily: "'Orbitron', monospace", marginBottom: 6,
+  },
+  analysisSummaryText: {
+    fontSize: 13, color: '#a8d8cc', lineHeight: 1.7,
+    fontFamily: "'Share Tech Mono', monospace",
+    borderLeft: '2px solid #00dc9b33', paddingLeft: 12, marginTop: 6,
+  },
+  rawToggleBtn: {
+    background: 'none', border: '1px solid rgba(0,220,155,0.15)',
+    color: '#4a9888', cursor: 'pointer', fontFamily: 'monospace',
+    fontSize: 11, padding: '6px 12px', letterSpacing: 1,
+    transition: 'color 0.2s',
+  },
+  rawJson: {
+    marginTop: 8, padding: 16,
+    background: 'rgba(0,0,0,0.4)',
+    border: '1px solid rgba(0,220,155,0.08)',
+    color: '#5aaa88', fontSize: 11, fontFamily: 'monospace',
+    overflowX: 'auto', maxHeight: 320, overflowY: 'auto',
+    lineHeight: 1.5,
+  },
 
   modeGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 },
   modeBtn: {
