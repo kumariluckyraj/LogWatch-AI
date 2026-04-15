@@ -238,7 +238,7 @@ app.use((req, res) => {
         : config.stable_url
       : config.stable_url;
 
-  proxy.web(req, res, { target });
+proxy.web(req, res, { target, changeOrigin: true });
 
   res.on("finish", async () => {
     const duration = Date.now() - req.startTime;
