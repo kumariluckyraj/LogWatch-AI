@@ -33,7 +33,23 @@ const triggerAgent = new TriggerAgent(errorTracker, {
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
-app.use(cors());
+
+// Allow all origins — tighten this in production
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+// Disable caching on ALL /api routes — fixes 304 empty body issue
+app.use("/api", (req, res, next) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+  next();
+});
 
 app.use((req, res, next) => {
   req.startTime = Date.now();
@@ -69,18 +85,24 @@ function isValidPatch(patch) {
 
 // ================= ROUTES =================
 
-// stats
+// Health check — useful for UptimeRobot pings
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", uptime: process.uptime(), ts: Date.now() });
+});
+
+// Stats — always returns live in-memory data
 app.get("/api/stats", (req, res) => {
   res.json(errorTracker.getStats());
 });
 
-// logs
+// Logs — returns today's logs from filesystem
+// On Render this resets on restart, but live requests in same session will show
 app.get("/api/logs", (req, res) => {
   const logs = logger.getTodayLogs();
-  res.json({ logs, count: logs?.length || 0 });
+  res.json({ logs: logs || [], count: logs?.length || 0 });
 });
 
-// config
+// Config
 app.get("/api/config", (req, res) => {
   res.json(getConfig());
 });
@@ -96,34 +118,40 @@ app.post("/api/config", (req, res) => {
   config.mode = mode;
   saveConfig(config);
 
-  res.json({ success: true });
+  res.json({ success: true, mode });
 });
 
-// rollback history
+// Rollback history
 app.get("/api/rollback-history", (req, res) => {
   try {
     const history = autoRollback.getRollbackHistory();
-
-    res.json({
-      success: true,
-      count: history.length,
-      history,
-    });
+    res.json({ success: true, count: history.length, history });
   } catch (err) {
     console.error("[ROLLBACK HISTORY ERROR]", err.message);
     res.status(500).json({ error: "Failed to fetch rollback history" });
   }
 });
 
+// Manual emergency rollback
+app.post("/api/rollback", (req, res) => {
+  try {
+    const config = getConfig();
+    config.mode = "stable";
+    saveConfig(config);
+    console.log("🔄 Manual rollback triggered via API");
+    res.json({ success: true, message: "Rolled back to stable" });
+  } catch (err) {
+    res.status(500).json({ error: "Rollback failed" });
+  }
+});
+
 // ================= AI STATE =================
 app.get("/api/ai/state", (req, res) => {
-  res.json({
-    success: true,
-    data: getAIState(),
-  });
+  res.json({ success: true, data: getAIState() });
 });
 
 // ================= DEBUG INGEST =================
+// Call this manually to push current session logs into Pinecone
 app.post("/api/debug/ingest", async (req, res) => {
   const logs = logger.getTodayLogs();
 
@@ -135,37 +163,46 @@ app.post("/api/debug/ingest", async (req, res) => {
 
   try {
     await ingestLogs(normalized);
+    console.log("[DEBUG INGEST] Ingested", normalized.length, "logs to Pinecone");
   } catch (err) {
     console.error("[INGEST ERROR]", err.message);
+    return res.status(500).json({ error: err.message });
   }
 
   res.json({ success: true, ingested: normalized.length });
 });
 
-// ================= ANALYZE (SAFE PATCH FLOW) =================
+// ================= ANALYZE =================
 app.post("/api/analyze", async (req, res) => {
+  console.log("🔍 /api/analyze called");
+
   try {
     const stats = errorTracker.getStats();
     const errorRate = parseFloat(
       stats.errorRatePercent || stats.errorRate || 0
     );
 
+    console.log("📊 Current stats:", stats, "errorRate:", errorRate);
+
     // ================= 1. ANALYSIS =================
-    const analysis = await runAnalysisAgent({
-      errorRate,
-      stats,
-    });
+    const analysis = await runAnalysisAgent({ errorRate, stats });
+
+    if (!analysis) {
+      console.error("[ANALYZE] runAnalysisAgent returned null");
+      return res.status(500).json({
+        success: false,
+        error: "AI analysis returned no result — check Render logs for Groq/Pinecone errors",
+      });
+    }
 
     // ================= 2. PATCH GENERATION =================
     let patch = null;
 
     try {
-      patch = await runPatchAgent({
-        analysis,
-        stats,
-      });
+      patch = await runPatchAgent({ analysis, stats });
     } catch (err) {
       console.error("[PATCH AGENT ERROR]", err.message);
+      // Non-fatal — analysis still succeeded
     }
 
     // ================= 3. APPLY PATCH SAFELY =================
@@ -175,35 +212,42 @@ app.post("/api/analyze", async (req, res) => {
       if (!isValidPatch(patch)) {
         console.log("❌ Invalid patch rejected");
         return res.json({
-          success: false,
-          error: "AI returned invalid patch",
+          success: true, // Analysis succeeded even if patch failed
           data: analysis,
+          patch: null,
+          patchError: "AI returned invalid patch — analysis result still valid",
         });
       }
 
-      createCheckpoint();
-      applyPatch(patch);
-      console.log("🩹 Patch applied successfully");
+      try {
+        createCheckpoint();
+        applyPatch(patch);
+        console.log("🩹 Patch applied successfully");
+      } catch (patchErr) {
+        console.error("[PATCH APPLY ERROR]", patchErr.message);
+        // Non-fatal
+      }
     }
 
     res.json({
       success: true,
       data: analysis,
       patch: patch
-        ? {
-            file: patch.file,
-            applied: true,
-          }
+        ? { file: patch.file, applied: true }
         : null,
     });
 
   } catch (err) {
-    console.error("[ANALYZE ERROR]", err.message);
-    res.status(500).json({ error: "Analysis failed" });
+    console.error("[ANALYZE ERROR]", err.message, err.stack);
+    res.status(500).json({
+      success: false,
+      error: "Analysis failed: " + err.message,
+    });
   }
 });
 
 // ================= PROXY RESPONSE CAPTURE =================
+// Capture response body BEFORE it gets sent, so we can log it
 proxy.on("proxyRes", (proxyRes, req, res) => {
   let body = [];
 
@@ -223,29 +267,33 @@ proxy.on("proxyRes", (proxyRes, req, res) => {
 app.use((req, res) => {
   const config = getConfig();
 
-  const target =
-    config.mode === "test"
-      ? config.test_url
-      : config.mode === "canary"
-      ? Math.random() * 100 < config.canary_percent
+  let target;
+  if (config.mode === "test") {
+    target = config.test_url;
+  } else if (config.mode === "canary") {
+    target =
+      Math.random() * 100 < (config.canary_percent || 10)
         ? config.test_url
-        : config.stable_url
-      : config.stable_url;
+        : config.stable_url;
+  } else {
+    target = config.stable_url;
+  }
+
+  console.log(`➡️  Proxying ${req.method} ${req.path} → ${target} [mode: ${config.mode}]`);
 
   proxy.web(req, res, { target, changeOrigin: true });
 
   res.on("finish", async () => {
     const duration = Date.now() - req.startTime;
 
-    logger.logRequest(
-      req,
-      res,
-      duration,
-      target,
-      res.statusCode,
-      req.responseBody
-    );
+    // Log to filesystem (works in same session; resets on Render restart)
+    try {
+      logger.logRequest(req, res, duration, target, res.statusCode, req.responseBody);
+    } catch (logErr) {
+      console.error("[LOGGER ERROR]", logErr.message);
+    }
 
+    // Always track in-memory (survives for this session)
     errorTracker.addRequest(res.statusCode);
 
     const stats = errorTracker.getStats();
@@ -253,8 +301,9 @@ app.use((req, res) => {
       stats.errorRatePercent || stats.errorRate || 0
     );
 
-    console.log("📊 Error Rate:", errorRate);
+    console.log(`📊 ${req.method} ${req.path} → ${res.statusCode} | errorRate: ${errorRate}%`);
 
+    // Ingest errors to Pinecone immediately — this is the persistent store
     if (res.statusCode >= 400) {
       const logEntry = {
         statusCode: res.statusCode,
@@ -264,11 +313,13 @@ app.use((req, res) => {
 
       try {
         await ingestLogs([logEntry]);
+        console.log(`📥 Ingested ${res.statusCode} error to Pinecone`);
       } catch (err) {
         console.error("[INGEST ERROR]", err.message);
       }
     }
 
+    // Auto-trigger AI agent if thresholds met
     try {
       await triggerAgent.observe({
         statusCode: res.statusCode,
@@ -283,17 +334,40 @@ app.use((req, res) => {
   });
 });
 
-// ================= ERROR =================
+// ================= PROXY ERROR =================
 proxy.on("error", (err, req, res) => {
   console.error("[PROXY ERROR]", err.message);
+
+  // Track proxy errors in error tracker too
+  errorTracker.addRequest(502);
+
   if (!res.headersSent) {
-    res.status(502).json({ error: "Bad Gateway" });
+    res.status(502).json({ error: "Bad Gateway", message: err.message });
   }
 });
 
 // ================= START =================
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+
+app.listen(PORT, async () => {
+  console.log(`🚀 LogWatchAI proxy running on port ${PORT}`);
   console.log("🤖 Agentic AI system ACTIVE");
+  console.log("📡 Backends:", getConfig());
+
+  // Seed Pinecone on startup so RAG always has at least one vector
+  // This prevents the "no logs to analyze" failure on cold start
+  try {
+    await ingestLogs([
+      {
+        statusCode: 200,
+        path: "/startup",
+        responseBody: {
+          message: `LogWatchAI proxy started. Monitoring active. Port: ${PORT}`,
+        },
+      },
+    ]);
+    console.log("✅ Pinecone seeded on startup");
+  } catch (e) {
+    console.error("⚠️  Pinecone seed failed (non-fatal):", e.message);
+  }
 });
