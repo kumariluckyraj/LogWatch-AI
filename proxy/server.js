@@ -29,7 +29,7 @@ const triggerAgent = new TriggerAgent(errorTracker, {
 // ================= MIDDLEWARE =================
 app.use(express.json());
 
-// ✅ FIXED CORS (FINAL)
+// ✅ CORS FIX
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "https://logwatchai.vercel.app");
   res.header(
@@ -41,14 +41,11 @@ app.use((req, res, next) => {
     "Content-Type, Authorization"
   );
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-
+  if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
 
-// Disable caching
+// ✅ Disable caching
 app.use("/api", (req, res, next) => {
   res.set("Cache-Control", "no-store");
   next();
@@ -132,13 +129,6 @@ app.post("/api/analyze", async (req, res) => {
 
     const analysis = await runAnalysisAgent({ errorRate, stats });
 
-    if (!analysis) {
-      return res.status(500).json({
-        success: false,
-        error: "No analysis returned",
-      });
-    }
-
     res.json({
       success: true,
       data: analysis,
@@ -153,7 +143,10 @@ app.post("/api/analyze", async (req, res) => {
 proxy.on("proxyRes", (proxyRes, req, res) => {
   let body = [];
 
-  // ✅ Force CORS on proxy responses
+  // 🔥 FIX: capture REAL backend status
+  req.actualStatusCode = proxyRes.statusCode;
+
+  // ✅ Force CORS headers on proxy responses
   proxyRes.headers["Access-Control-Allow-Origin"] =
     "https://logwatchai.vercel.app";
 
@@ -201,31 +194,33 @@ app.use((req, res) => {
   res.on("finish", async () => {
     const duration = Date.now() - req.startTime;
 
+    // 🔥 USE REAL STATUS
+    const status = req.actualStatusCode || res.statusCode || 200;
+
+    console.log("📡 BACKEND STATUS:", req.actualStatusCode);
+    console.log("📡 FINAL STATUS:", res.statusCode);
+
+    // LOGGING
     try {
-      logger.logRequest(
-        req,
-        res,
-        duration,
-        target,
-        res.statusCode,
-        req.responseBody
-      );
+      logger.logRequest(req, res, duration, target, status, req.responseBody);
     } catch (e) {
       console.error("Logger error:", e.message);
     }
 
-    errorTracker.addRequest(res.statusCode);
+    // TRACK ERRORS
+    errorTracker.addRequest(status);
 
     const stats = errorTracker.getStats();
     const errorRate = parseFloat(stats.errorRatePercent || 0);
 
-    console.log(`📊 ${res.statusCode} | errorRate: ${errorRate}%`);
+    console.log(`📊 ${status} | errorRate: ${errorRate}%`);
 
-    if (res.statusCode >= 400) {
+    // INGEST ERRORS
+    if (status >= 400) {
       try {
         await ingestLogs([
           {
-            statusCode: res.statusCode,
+            statusCode: status,
             path: req.path,
             responseBody: req.responseBody,
           },
@@ -236,9 +231,10 @@ app.use((req, res) => {
       }
     }
 
+    // TRIGGER AI
     try {
       await triggerAgent.observe({
-        statusCode: res.statusCode,
+        statusCode: status,
         path: req.path,
         responseBody: req.responseBody,
         errorRate,
