@@ -1,6 +1,6 @@
 {
   "mode": "stable",
-  "stable_url": "https://logwatch-stable.onrender.com",
-  "test_url": "https://logwatch-test.onrender.com",
+  "stable_url": "https://logwatch-stable.onrender.com/",
+  "test_url": "https://logwatch-test.onrender.com/",
   "canary_percent": 10
 }
