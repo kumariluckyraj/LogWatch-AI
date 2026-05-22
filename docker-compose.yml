@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  backend-stable:
+    build: ./backend-stable
+    ports:
+      - "5001:5001"
+    restart: unless-stopped
+
+  backend-test:
+    build: ./backend-test
+    ports:
+      - "5002:5002"
+    restart: unless-stopped
+
+  proxy:
+    build: ./proxy
+    ports:
+      - "4000:4000"
+    depends_on:
+      - backend-stable
+      - backend-test
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "3001:3000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3000
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    restart: unless-stopped

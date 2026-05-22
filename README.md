@@ -48,7 +48,21 @@ cd ../backend-stable && npm install
 cd ../backend-test && npm install
 ```
 
-## Running the System
+## Running with Docker (Recommended)
+
+To run the entire system (all backends, proxy, and dashboard) with a single command:
+```bash
+docker-compose up --build
+```
+This will start all 4 services and map them to your host machine.
+
+> [!WARNING]
+> **Configuration Note for Docker:**
+> Since Docker runs services in their own network, `127.0.0.1` inside the Proxy container will point to itself, not the backend containers. For local testing with Docker, you will need to change `proxy/config.json` to point to `http://backend-stable:5001` and `http://backend-test:5002` instead of `http://127.0.0.1:5001`.
+
+---
+
+## Running the System (Manual)
 
 Start in 3 separate terminals:
 
