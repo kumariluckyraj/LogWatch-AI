@@ -1,11 +1,12 @@
 const express = require("express");
 const httpProxy = require("http-proxy");
-const fs = require("fs");
+
 require("dotenv").config();
 
 const EnhancedLogger = require("./enhanced-logger");
 const ErrorTracker = require("./error-tracker");
 const AutoRollback = require("./auto-rollback");
+const { getTarget, getConfig, saveConfig } = require("./router");
 
 const { ingestLogs } = require("./rag/ingest");
 const TriggerAgent = require("./agents/trigger-agent");
@@ -34,12 +35,9 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "https://logwatchai.vercel.app");
   res.header(
     "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    "GET, POST, PUT, DELETE, OPTIONS, PATCH",
   );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
@@ -55,24 +53,6 @@ app.use((req, res, next) => {
   req.startTime = Date.now();
   next();
 });
-
-// ================= CONFIG =================
-const getConfig = () => {
-  try {
-    return JSON.parse(fs.readFileSync("./config.json", "utf8"));
-  } catch {
-    return {
-      mode: "stable",
-      stable_url: "https://logwatch-stable.onrender.com",
-      test_url: "https://logwatch-test.onrender.com",
-      canary_percent: 10,
-    };
-  }
-};
-
-const saveConfig = (config) => {
-  fs.writeFileSync("./config.json", JSON.stringify(config, null, 2));
-};
 
 // ================= ROUTES =================
 app.get("/health", (req, res) => {
@@ -141,19 +121,7 @@ app.post("/api/analyze", async (req, res) => {
 
 // ================= PROXY =================
 app.use((req, res) => {
-  const config = getConfig();
-
-  let target;
-  if (config.mode === "test") {
-    target = config.test_url;
-  } else if (config.mode === "canary") {
-    target =
-      Math.random() * 100 < (config.canary_percent || 10)
-        ? config.test_url
-        : config.stable_url;
-  } else {
-    target = config.stable_url;
-  }
+  const target = getTarget();
 
   req.target = target;
 
