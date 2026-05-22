@@ -212,10 +212,15 @@ Provide setup or deployment guides
 
 
 ## 📋 Contribution Guidelines
+
 -Follow the existing project structure
+
 -Write clean, readable, and modular code
+
 -Add comments where necessary
+
 -Keep commits meaningful and concise
+
 -Update documentation when required
 
 
