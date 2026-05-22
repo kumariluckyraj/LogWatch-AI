@@ -1,4 +1,4 @@
-🚀 AI-Powered System Reliability Platform
+🚀 **AI-Powered System Reliability Platform**
 
 An intelligent, self-healing platform designed for real-time system reliability and safe deployments. This project leverages AI to monitor, analyze, and automatically respond to system failures — ensuring resilience, stability, and minimal downtime.
 
