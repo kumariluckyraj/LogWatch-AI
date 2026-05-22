@@ -1,11 +1,21 @@
-# 🔍 LogWatch-AI
+# 🔍 LogWatch-AI (AI-Powered System Reliability Platform)
 
 [![GSSoC 2026](https://img.shields.io/badge/GSSoC-2026-pink.svg)](https://gssoc.co/)
 [![Node.js](https://img.shields.io/badge/Node.js-v16%2B-green.svg)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18-blue.svg)](https://react.dev/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-**LogWatch-AI** is an advanced, automated traffic proxy, log monitoring, and canary deployment system. Built with a real-time error tracking engine and an automatic rollback mechanism, it protects production services from experimental release failures. The project features a premium React-based monitoring dashboard providing visual metrics, real-time log streaming, and automated self-healing visualization.
+**LogWatch-AI** is an intelligent, self-healing platform designed for real-time system reliability and safe deployments. Built with a real-time error tracking engine, automatic rollback mechanisms, and RAG-based log analysis, it protects production services from experimental release failures. The project features a premium React-based monitoring dashboard providing visual metrics, real-time log streaming, autonomous AI agent analysis, and automated self-healing visualization.
+
+---
+
+## 🌟 Overview
+
+Modern distributed systems are complex and prone to failures. This platform combines:
+- **Intelligent Traffic Routing**: Dynamically route between stable and test backends or split traffic with canary settings.
+- **RAG-Based Log Analysis**: Explains log patterns and checks anomalies in real time.
+- **Autonomous AI Agents**: Explores error causes and suggests/triggers recovery actions.
+- **Self-Healing Mechanics**: Instantly rolls back config states when error thresholds are crossed, minimizing downtime.
 
 ---
 
@@ -97,7 +107,21 @@ cd ../dashboard && npm install
 
 ---
 
-## 💻 Running the System
+## 🐳 Running with Docker (Recommended)
+
+To run the entire system (all backends, proxy, and dashboard) with a single command:
+```bash
+docker-compose up --build
+```
+This will start all 4 services and map them to your host machine.
+
+> [!WARNING]
+> **Configuration Note for Docker:**
+> Since Docker runs services in their own network, `127.0.0.1` inside the Proxy container will point to itself, not the backend containers. For local testing with Docker, you will need to change `proxy/config.json` to point to `http://backend-stable:5001` and `http://backend-test:5002` instead of `http://127.0.0.1:5001`.
+
+---
+
+## 💻 Running the System (Manual)
 
 Start the services by running the start script in four separate terminals:
 
@@ -226,9 +250,114 @@ curl http://127.0.0.1:4000/api/rollback-history
 
 ---
 
-## 🤝 Contribution Guidelines
+## 🤝 Contributing
 
-We welcome contributions from the community! Feel free to:
-- Open issues for bug reports or feature ideas.
-- Directly fork the repository, make improvements (such as UI dashboard refinements, AI integrations, or additional proxy tests), and raise a Pull Request.
-- Make sure to format your code nicely and test your changes locally.
+We welcome contributions from developers of all skill levels! Whether you're fixing bugs, improving documentation, or adding features — your help is appreciated 🚀
+
+### 🆕 Adding New Features / Modules
+1. Fork the repository.
+2. Create a new branch:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+3. Implement your feature and ensure everything works as expected.
+4. Commit your changes:
+   ```bash
+   git commit -m "Add: short description of feature"
+   ```
+5. Push to your fork and open a Pull Request.
+
+### 🐛 Bug Fixes & Improvements
+1. Fork the repository.
+2. Create a branch:
+   ```bash
+   git checkout -b fix/issue-name
+   ```
+3. Fix the issue and test thoroughly.
+4. Submit a Pull Request with a clear description.
+
+### 🧠 AI / Log Analysis Contributions
+You can contribute by improving the AI capabilities of the platform:
+- Enhance RAG pipelines.
+- Improve log parsing & anomaly detection.
+- Optimize AI agent decision-making.
+- Add new recovery or rollback strategies.
+
+### 📝 Documentation Contributions
+Good documentation is just as important as code!
+- Improve README clarity.
+- Add architecture explanations.
+- Fix typos or formatting.
+- Provide setup or deployment guides.
+
+### 📋 Contribution Guidelines
+- Follow the existing project structure.
+- Write clean, readable, and modular code.
+- Add comments where necessary.
+- Keep commits meaningful and concise.
+- Update documentation when required.
+
+### 🧪 Testing Guidelines
+Before submitting your PR, make sure:
+- [ ] The project runs without errors.
+- [ ] Logs and monitoring features work correctly.
+- [ ] AI-based detection behaves as expected.
+- [ ] Rollback/recovery triggers properly.
+- [ ] No breaking changes are introduced.
+
+---
+
+## 🌐 Browser & Environment Compatibility
+
+This project includes dashboards and UI components that should work across modern environments.
+
+### ✅ Recommended Browsers
+- Google Chrome
+- Mozilla Firefox
+- Microsoft Edge
+- Safari
+
+### 📱 Responsive Testing
+Ensure your changes work across:
+- **Desktop** 💻
+- **Tablet** 📱
+- **Mobile** 📲
+
+*Helpful tools:* Chrome DevTools Device Toolbar, Firefox Responsive Mode.
+
+---
+
+## 🛠 Troubleshooting & Common Issues
+
+Some problems may arise due to cached assets, browser-specific rendering, unsupported APIs, or extension conflicts.
+
+### 🔍 Troubleshooting Checklist
+If something doesn’t work:
+- Hard refresh (Ctrl + Shift + R)
+- Clear cache
+- Use Incognito mode
+- Disable browser extensions
+- Check the browser console for errors
+
+### 📌 Before Submitting a PR
+Make sure:
+- [ ] Code is tested
+- [ ] UI is responsive
+- [ ] Features work as intended
+- [ ] No console errors
+- [ ] Documentation is updated
+
+---
+
+## 🆘 Need Help?
+If you have questions, ideas, or run into issues:
+- **Discussions**: Use GitHub Discussions to ask questions or share ideas.
+- **Bug Reports**: Open an Issue to report bugs or request features.
+- **Direct Contact**: Kumari Lucky Raj (LinkedIn / GitHub)
+
+## ⭐ Show Your Support
+If this project helped you, please consider:
+- ⭐ Starring this repository
+- 🍴 Forking it to contribute
+- 📢 Sharing it with others
+- 💖 Following for more projects!
