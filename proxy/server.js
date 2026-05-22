@@ -19,6 +19,8 @@ const proxy = httpProxy.createProxyServer({ changeOrigin: true });
 const logger = new EnhancedLogger();
 const errorTracker = new ErrorTracker(100);
 const autoRollback = new AutoRollback(20);
+const RolloutManager = require("./rollout-manager");
+const rolloutManager = new RolloutManager(errorTracker, autoRollback);
 
 const triggerAgent = new TriggerAgent(errorTracker, {
   errorThreshold: 20,
@@ -115,6 +117,57 @@ app.get("/api/rollback-history", (req, res) => {
   }
 });
 
+// ================= PROGRESSIVE ROLLOUT ROUTES =================
+app.get("/api/rollout/status", (req, res) => {
+  res.json({ success: true, ...rolloutManager.getStatus() });
+});
+
+app.post("/api/rollout/start", (req, res) => {
+  const result = rolloutManager.start();
+  if (result.success) {
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ error: result.error });
+  }
+});
+
+app.post("/api/rollout/pause", (req, res) => {
+  const result = rolloutManager.pause();
+  if (result.success) {
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ error: result.error });
+  }
+});
+
+app.post("/api/rollout/resume", (req, res) => {
+  const result = rolloutManager.resume();
+  if (result.success) {
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ error: result.error });
+  }
+});
+
+app.post("/api/rollout/abort", (req, res) => {
+  const result = rolloutManager.abort("Manual dashboard trigger");
+  if (result.success) {
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ error: result.error });
+  }
+});
+
+app.post("/api/rollback", (req, res) => {
+  const result = autoRollback.manualRollback();
+  rolloutManager.abort("Manual rollback triggered");
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(500).json({ error: result.error });
+  }
+});
+
 app.get("/api/ai/state", (req, res) => {
   res.json({ success: true, data: getAIState() });
 });
@@ -144,7 +197,13 @@ app.use((req, res) => {
   const config = getConfig();
 
   let target;
-  if (config.mode === "test") {
+  if (rolloutManager.status === "rolling_out" || rolloutManager.status === "completed") {
+    const canaryPercent = rolloutManager.getCanaryPercent();
+    target =
+      Math.random() * 100 < canaryPercent
+        ? config.test_url
+        : config.stable_url;
+  } else if (config.mode === "test") {
     target = config.test_url;
   } else if (config.mode === "canary") {
     target =

@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Analytics from './Analytics';
 import LogAnalysis from './LogAnalysis';
 
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:4000/api'
+  : 'https://logwatch-proxy.onrender.com/api';
+
 function CursorBackground() {
   const canvasRef = useRef(null);
   const mouse = useRef({ x: 0.5, y: 0.5 });
@@ -297,11 +301,22 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [manualRollback, setManualRollback] = useState(false);
+  const [rolloutState, setRolloutState] = useState({
+    status: 'idle',
+    activePhaseIndex: null,
+    activePhaseName: 'idle',
+    canaryPercent: 0,
+    elapsedSecondsInPhase: 0,
+    durationSeconds: 0,
+    isPaused: false,
+    abortReason: '',
+    phases: []
+  });
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const resp = await fetch('https://logwatch-proxy.onrender.com/api/stats', { method: 'GET' });
+        const resp = await fetch(`${API_BASE}/stats`, { method: 'GET' });
         if (resp.ok) {
           const data = await resp.json();
           setStats(prev => ({
@@ -323,9 +338,27 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const fetchRolloutStatus = async () => {
+      try {
+        const resp = await fetch(`${API_BASE}/rollout/status`, { method: 'GET' });
+        if (resp.ok) {
+          const data = await resp.json();
+          setRolloutState(data);
+        }
+      } catch (e) {
+        console.error('[Rollout fetch]', e);
+      }
+    };
+
+    fetchRolloutStatus();
+    const interval = setInterval(fetchRolloutStatus, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const setMode = async (newMode) => {
     try {
-      const resp = await fetch('https://logwatch-proxy.onrender.com/api/config', {
+      const resp = await fetch(`${API_BASE}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: newMode }),
@@ -341,13 +374,61 @@ const Dashboard = () => {
   const triggerRollback = async () => {
     setManualRollback(true);
     try {
-      await fetch('https://logwatch-proxy.onrender.com/api/rollback', { method: 'POST' });
+      await fetch(`${API_BASE}/rollback`, { method: 'POST' });
       setStats(prev => ({ ...prev, mode: 'stable' }));
     } catch (e) {
       console.error('[Rollback error]', e);
     } finally {
       setManualRollback(false);
     }
+  };
+
+  const startRollout = async () => {
+    try {
+      await fetch(`${API_BASE}/rollout/start`, { method: 'POST' });
+    } catch (e) {
+      console.error('[Start rollout error]', e);
+    }
+  };
+
+  const pauseRollout = async () => {
+    try {
+      await fetch(`${API_BASE}/rollout/pause`, { method: 'POST' });
+    } catch (e) {
+      console.error('[Pause rollout error]', e);
+    }
+  };
+
+  const resumeRollout = async () => {
+    try {
+      await fetch(`${API_BASE}/rollout/resume`, { method: 'POST' });
+    } catch (e) {
+      console.error('[Resume rollout error]', e);
+    }
+  };
+
+  const abortRollout = async () => {
+    try {
+      await fetch(`${API_BASE}/rollout/abort`, { method: 'POST' });
+    } catch (e) {
+      console.error('[Abort rollout error]', e);
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'rolling_out': return '#00f0ff';
+      case 'paused': return '#f59e0b';
+      case 'completed': return '#00dc9b';
+      case 'aborted': return '#ff3355';
+      default: return '#7ecfbe';
+    }
+  };
+
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
   };
 
   if (loading) {
@@ -432,6 +513,105 @@ const Dashboard = () => {
             {manualRollback ? '⏳ ROLLING BACK...' : '🚨 EMERGENCY ROLLBACK'}
           </button>
           <div style={styles.rollbackInfo}>Triggers automatic rollback to stable server</div>
+        </div>
+
+        {/* ================= PROGRESSIVE ROLLOUT CONTROL CENTER ================= */}
+        <div style={styles.section}>
+          <SectionHeader title="Progressive Canary Rollout" tag="AUTOMATED" />
+          
+          <div style={rolloutStyles.container}>
+            <div style={rolloutStyles.header}>
+              <div style={rolloutStyles.titleRow}>
+                <span style={rolloutStyles.statusLabel}>
+                  STATUS: <strong style={{ color: getStatusColor(rolloutState.status) }}>{rolloutState.status.toUpperCase()}</strong>
+                </span>
+                {rolloutState.status === 'rolling_out' && (
+                  <span style={rolloutStyles.timer}>
+                    ⏱️ {formatTime(rolloutState.durationSeconds - rolloutState.elapsedSecondsInPhase)} left in {rolloutState.activePhaseName}
+                  </span>
+                )}
+                {rolloutState.status === 'paused' && (
+                  <span style={{ ...rolloutStyles.timer, color: '#f59e0b' }}>
+                    ⏸️ PROGRESSION PAUSED
+                  </span>
+                )}
+              </div>
+              <div style={rolloutStyles.description}>
+                {rolloutState.status === 'idle' && 'Deploy stable releases incrementally to the canary server with safety checks.'}
+                {rolloutState.status === 'rolling_out' && `Actively splitting traffic dynamically. Current share: ${rolloutState.canaryPercent}% Canary.`}
+                {rolloutState.status === 'paused' && 'Canary traffic splits frozen. Monitor metrics or resume/abort rollout.'}
+                {rolloutState.status === 'aborted' && `Rollout Aborted! Target rolled back to Stable. Reason: ${rolloutState.abortReason || 'Unknown'}`}
+                {rolloutState.status === 'completed' && '🎉 Rollout Successful! 100% traffic promoted to canary backend.'}
+              </div>
+            </div>
+
+            {/* Stepper Timeline Visualizer */}
+            <div style={rolloutStyles.timelineContainer}>
+              {rolloutState.phases && rolloutState.phases.map((phase, idx) => {
+                const isActive = rolloutState.status === 'rolling_out' && rolloutState.activePhaseIndex === idx;
+                const isCompleted = rolloutState.status === 'completed' || (rolloutState.status === 'rolling_out' && rolloutState.activePhaseIndex > idx);
+                const isAborted = rolloutState.status === 'aborted';
+                const isPaused = rolloutState.status === 'paused' && rolloutState.activePhaseIndex === idx;
+
+                let stepStyle = rolloutStyles.stepNode;
+                if (isActive) stepStyle = { ...stepStyle, ...rolloutStyles.stepActive };
+                else if (isCompleted) stepStyle = { ...stepStyle, ...rolloutStyles.stepCompleted };
+                else if (isPaused) stepStyle = { ...stepStyle, ...rolloutStyles.stepPaused };
+                else if (isAborted) stepStyle = { ...stepStyle, ...rolloutStyles.stepAborted };
+
+                return (
+                  <React.Fragment key={idx}>
+                    {idx > 0 && (
+                      <div style={{
+                        ...rolloutStyles.stepLine,
+                        background: isCompleted ? '#00dc9b' : isAborted ? '#ff3355' : 'rgba(255,255,255,0.08)'
+                      }} />
+                    )}
+                    <div style={stepStyle}>
+                      <div style={rolloutStyles.stepPercent}>{phase.percent}%</div>
+                      <div style={rolloutStyles.stepDuration}>{phase.durationSeconds}s</div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+              
+              <div style={{
+                ...rolloutStyles.stepLine,
+                background: rolloutState.status === 'completed' ? '#00dc9b' : 'rgba(255,255,255,0.08)'
+              }} />
+              <div style={{
+                ...rolloutStyles.stepNode,
+                ...(rolloutState.status === 'completed' ? rolloutStyles.stepCompleted : {})
+              }}>
+                <div style={rolloutStyles.stepPercent}>100%</div>
+                <div style={rolloutStyles.stepDuration}>PROMOTE</div>
+              </div>
+            </div>
+
+            {/* Control Panel Buttons */}
+            <div style={rolloutStyles.buttonRow}>
+              {rolloutState.status === 'idle' || rolloutState.status === 'completed' || rolloutState.status === 'aborted' ? (
+                <button onClick={startRollout} style={rolloutStyles.btnPrimary}>
+                  ⚡ START PROGRESSIVE ROLLOUT
+                </button>
+              ) : (
+                <>
+                  {rolloutState.isPaused ? (
+                    <button onClick={resumeRollout} style={rolloutStyles.btnWarning}>
+                      ▶️ RESUME ROLLOUT
+                    </button>
+                  ) : (
+                    <button onClick={pauseRollout} style={rolloutStyles.btnWarning}>
+                      ⏸️ PAUSE ROLLOUT
+                    </button>
+                  )}
+                  <button onClick={abortRollout} style={rolloutStyles.btnDanger}>
+                    🚨 PANIC ABORT ROLLOUT
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         <div style={styles.section}>
@@ -591,6 +771,143 @@ const styles = {
   td: { padding: '10px 12px', color: '#8ecfbf', verticalAlign: 'middle' },
   badge: { padding: '2px 8px', fontSize: 11, fontFamily: 'monospace', display: 'inline-block' },
   footer: { textAlign: 'center', padding: '24px 0', fontSize: 10, letterSpacing: 4, color: '#3a8878', fontFamily: "'Orbitron', monospace", borderTop: '1px solid rgba(0,220,155,0.05)' },
+};
+
+const rolloutStyles = {
+  container: {
+    background: 'rgba(255, 255, 255, 0.01)',
+    border: '1px solid rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: '24px 20px',
+    marginTop: 15,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  header: {
+    marginBottom: 20,
+  },
+  titleRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statusLabel: {
+    fontSize: 12,
+    color: '#7ecfbe',
+    letterSpacing: '1px',
+  },
+  timer: {
+    fontSize: 12,
+    color: '#00f0ff',
+    fontWeight: 'bold',
+  },
+  description: {
+    fontSize: 13,
+    color: '#a8d8cc',
+    lineHeight: '1.4',
+  },
+  timelineContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '20px 24px',
+    marginBottom: 24,
+    background: 'rgba(0,0,0,0.15)',
+    borderRadius: 6,
+  },
+  stepNode: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 64,
+    height: 64,
+    borderRadius: '50%',
+    background: 'rgba(255,255,255,0.02)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    transition: 'all 0.4s ease',
+  },
+  stepActive: {
+    border: '1px solid #00f0ff',
+    boxShadow: '0 0 12px rgba(0, 240, 255, 0.25)',
+    background: 'rgba(0, 240, 255, 0.03)',
+    animation: 'pulse 1.5s infinite',
+  },
+  stepCompleted: {
+    border: '1px solid #00dc9b',
+    boxShadow: '0 0 12px rgba(0, 220, 155, 0.2)',
+    background: 'rgba(0, 220, 155, 0.03)',
+  },
+  stepPaused: {
+    border: '1px solid #f59e0b',
+    boxShadow: '0 0 12px rgba(245, 158, 11, 0.25)',
+    background: 'rgba(245, 158, 11, 0.03)',
+  },
+  stepAborted: {
+    border: '1px solid #ff3355',
+    boxShadow: '0 0 12px rgba(255, 51, 85, 0.25)',
+    background: 'rgba(255, 51, 85, 0.03)',
+  },
+  stepPercent: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#fff',
+  },
+  stepDuration: {
+    fontSize: 9,
+    color: '#7ecfbe',
+    marginTop: 2,
+    letterSpacing: '0.5px',
+  },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    margin: '0 8px',
+    transition: 'all 0.4s ease',
+  },
+  buttonRow: {
+    display: 'flex',
+    gap: 12,
+  },
+  btnPrimary: {
+    flex: 1,
+    background: 'rgba(0, 220, 155, 0.1)',
+    border: '1px solid #00dc9b',
+    color: '#00dc9b',
+    padding: '12px 20px',
+    borderRadius: 4,
+    fontSize: 13,
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 0 8px rgba(0, 220, 155, 0.15)',
+  },
+  btnWarning: {
+    flex: 1,
+    background: 'rgba(245, 158, 11, 0.1)',
+    border: '1px solid #f59e0b',
+    color: '#f59e0b',
+    padding: '12px 20px',
+    borderRadius: 4,
+    fontSize: 13,
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+  },
+  btnDanger: {
+    flex: 1,
+    background: 'rgba(255, 51, 85, 0.1)',
+    border: '1px solid #ff3355',
+    color: '#ff3355',
+    padding: '12px 20px',
+    borderRadius: 4,
+    fontSize: 13,
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 0 8px rgba(255, 51, 85, 0.15)',
+  },
 };
 
 export default Dashboard;
