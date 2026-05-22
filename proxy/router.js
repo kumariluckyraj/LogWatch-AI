@@ -1,30 +1,52 @@
-const fs = require("fs")
+const fs = require("fs");
 
-function getTarget(){
+function getConfig() {
+  try {
+    return JSON.parse(fs.readFileSync("./config.json", "utf8"));
+  } catch (err) {
+    console.error("❌ Failed to read config:", err.message);
 
-    const config = JSON.parse(
-        fs.readFileSync("./config.json")
-    )
-
-    if(config.mode === "stable"){
-        return config.stable_url
-    }
-
-    if(config.mode === "test"){
-        return config.test_url
-    }
-
-    if(config.mode === "canary"){
-
-        const r = Math.random()*100
-
-        if(r < config.canary_percent){
-            return config.test_url
-        }
-
-        return config.stable_url
-    }
-
+    return {
+      mode: "stable",
+      stable_url: "http://127.0.0.1:5001",
+      test_url: "http://127.0.0.1:5002",
+      canary_percent: 10,
+    };
+  }
 }
 
-module.exports = getTarget
+function saveConfig(config) {
+  try {
+    fs.writeFileSync("./config.json", JSON.stringify(config, null, 2), "utf8");
+  } catch (err) {
+    console.error("❌ Failed to save config:", err.message);
+  }
+}
+
+function getTarget() {
+  const config = getConfig();
+
+  switch (config.mode) {
+    case "stable":
+      return config.stable_url;
+
+    case "test":
+      return config.test_url;
+
+    case "canary":
+      return Math.random() * 100 < config.canary_percent
+        ? config.test_url
+        : config.stable_url;
+
+    default:
+      console.warn(`⚠️ Unknown mode "${config.mode}", falling back to stable`);
+
+      return config.stable_url;
+  }
+}
+
+module.exports = {
+  getTarget,
+  getConfig,
+  saveConfig,
+};
