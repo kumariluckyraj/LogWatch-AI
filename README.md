@@ -204,11 +204,15 @@ Add new recovery or rollback strategies
 
 
 ## 📝 Documentation Contributions
-Good documentation is just as important as code!
-Improve README clarity
-Add architecture explanations
-Fix typos or formatting
-Provide setup or deployment guides
+-Good documentation is just as important as code!
+
+-Improve README clarity
+
+-Add architecture explanations
+
+-Fix typos or formatting
+
+-Provide setup or deployment guides
 
 
 ## 📋 Contribution Guidelines
@@ -226,71 +230,112 @@ Provide setup or deployment guides
 
 ## 🧪 Testing Guidelines
 Before submitting your PR, make sure:
-✅ The project runs without errors
-✅ Logs and monitoring features work correctly
-✅ AI-based detection behaves as expected
-✅ Rollback/recovery triggers properly
-✅ No breaking changes are introduced
+
+-✅ The project runs without errors
+
+-✅ Logs and monitoring features work correctly
+
+-✅ AI-based detection behaves as expected
+
+-✅ Rollback/recovery triggers properly
+
+-✅ No breaking changes are introduced
 
 
 ## 🌐 Browser & Environment Compatibility
+
 This project includes dashboards and UI components that should work across modern environments.
+
 ✅ Recommended Browsers
-Google Chrome
-Mozilla Firefox
-Microsoft Edge
-Safari
+
+-Google Chrome
+
+-Mozilla Firefox
+
+-Microsoft Edge
+
+-Safari
 
 
 ## 📱 Responsive Testing
+
 Ensure your changes work across:
-Desktop 💻
-Tablet 📱
-Mobile 📲
+
+-Desktop 💻
+
+-Tablet 📱
+
+-Mobile 📲
+
 Helpful tools:
-Chrome DevTools Device Toolbar
-Firefox Responsive Mode
+
+-Chrome DevTools Device Toolbar
+
+-Firefox Responsive Mode
 
 
 ## 🛠 Common Issues
 Some problems may arise due to:
-Cached assets
-Browser-specific rendering
-Unsupported APIs
-Extension conflicts
+
+-Cached assets
+
+-Browser-specific rendering
+
+-Unsupported APIs
+
+-Extension conflicts
 
 
 ## 🔍 Troubleshooting Checklist
 If something doesn’t work:
-Hard refresh (Ctrl + Shift + R)
-Clear cache
-Use Incognito mode
-Disable extensions
-Check console for errors
+
+-Hard refresh (Ctrl + Shift + R)
+
+-Clear cache
+
+-Use Incognito mode
+
+-Disable extensions
+
+-Check console for errors
 
 
 ## 📌 Before Submitting a PR
 Make sure:
-✅ Code is tested
-✅ UI is responsive
-✅ Features work as intended
-✅ No console errors
-✅ Documentation is updated
+
+-✅ Code is tested
+
+-✅ UI is responsive
+
+-✅ Features work as intended
+
+-✅ No console errors
+
+-✅ Documentation is updated
 
 
 ## 🆘 Need Help?
 If you have questions, ideas, or run into issues, feel free to reach out:
-💬 Discussions: Use GitHub Discussions to ask questions or share ideas
-🐛 Bug Reports: Open an Issue to report bugs or request features
-📧 Direct Contact: For any queries, simply create an issue — we’ll respond as soon as possible
+
+-💬 Discussions: Use GitHub Discussions to ask questions or share ideas
+
+-🐛 Bug Reports: Open an Issue to report bugs or request features
+
+-📧 Direct Contact: For any queries, simply create an issue — we’ll respond as soon as possible
 
 ## 🌟 Stay Connected
-💼 LinkedIn: Kumari Lucky Raj
-🐙 GitHub: kumariluckyraj
+
+-💼 LinkedIn: Kumari Lucky Raj
+
+-🐙 GitHub: kumariluckyraj
 
 ## ⭐ Show Your Support
 If this project helped you, please consider:
-⭐ Starring this repository
-🍴 Forking it to contribute
-📢 Sharing it with others
-💖 Following for more amazing projects
+
+-⭐ Starring this repository
+
+-🍴 Forking it to contribute
+
+-📢 Sharing it with others
+
+-💖 Following for more amazing projects
