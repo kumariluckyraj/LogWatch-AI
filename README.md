@@ -146,10 +146,11 @@ Edit `proxy/config.json`:
 System automatically switches to stable mode when error rate exceeds 20%.
 
 Threshold can be changed in `proxy/server.js`:
+
 ```javascript
 const autoRollback = new AutoRollback(20);  // Change 20 to desired threshold
 ## Features
-
+```
 - Real-time error rate tracking (last 100 requests)
 - Automatic failover when errors exceed threshold
 - JSON-based request logging with daily rotation
