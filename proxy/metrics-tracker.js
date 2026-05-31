@@ -7,6 +7,7 @@ class MetricsTracker{
         this.totalLatency=0;
         this.maxLatency=0;
         this.minLatency=Infinity;
+        this.startTime= Date.now();
     }
 recordRequest(statusCode, latency) {
     this.totalRequests++;
@@ -27,6 +28,10 @@ recordRequest(statusCode, latency) {
 }
 
 getMetrics() {
+
+    const uptimeMinutes= (Date.now() - this.startTime) /60000;
+
+    const requestsPerMinute= uptimeMinutes>0 ? Number((this.totalRequests/uptimeMinutes).toFixed(2)):0;
     const successRate= this.totalRequests>0 ? Number(((this.successCount/this.totalRequests)*100).toFixed(2)):0;
 
     const failureRate=this.totalRequests>0 ? Number(((this.failureCount/this.totalRequests)*100).toFixed(2)):0;
@@ -48,7 +53,8 @@ getMetrics() {
         : this.minLatency,
     
     successRate: successRate,
-    failureRate: failureRate
+    failureRate: failureRate,
+    requestsPerMinute: requestsPerMinute
   };
 }
 }

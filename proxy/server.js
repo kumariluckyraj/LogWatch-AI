@@ -86,7 +86,11 @@ app.get("/api/stats", (req, res) => {
 });
 
 app.get("/api/metrics",(req, res) => { 
-  res.json(metricsTracker.getMetrics());
+  const config= getConfig();
+
+  res.json({
+    ...metricsTracker.getMetrics(),activeBackend: config.mode
+  });
 });
 
 app.get("/api/logs", (req, res) => {
