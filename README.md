@@ -1,100 +1,197 @@
-## 🚀 AI-Powered System Reliability Platform
+# 📊 LogWatch-AI
 
-An intelligent, self-healing platform designed for real-time system reliability and safe deployments. This project leverages AI to monitor, analyze, and automatically respond to system failures — ensuring resilience, stability, and minimal downtime.
-
-## 🌟 Overview
-
-Modern distributed systems are complex and prone to failures. This platform combines:
-
-Intelligent traffic routing
-RAG-based log analysis
-Autonomous AI agents
-
-to proactively detect issues and take corrective actions such as instant rollback or recovery, enabling self-healing systems.
-
-## ⚙️ Key Features
-🔄 Real-Time Traffic Routing
-Dynamically routes traffic between stable and test backends
-Enables safe deployments (canary / blue-green strategies)
-
-## 🧠 RAG-Based Log Analysis
-Uses Retrieval-Augmented Generation (RAG) to:
-Analyze logs in real time
-Identify anomalies and failure patterns
-Provide contextual insights
-
-## 🤖 Autonomous AI Agents
-AI agents continuously monitor system health
-Detect failures without manual intervention
-Trigger automated recovery workflows
-
-## ⚡Instant Rollback & Recovery
-Automatically rolls back to stable versions on failure detection
-Minimizes downtime and user impact
-
-## 📊 Observability & Monitoring
-Track:
-Request trends
-Error rates
-Backend health
-Traffic distribution
-
-
-## Setup.
-```bash
-# Install dependencies in each folder
-cd proxy && npm install
-cd ../backend-stable && npm install
-cd ../backend-test && npm install
-```
-
-## Running with Docker (Recommended)
-
-To run the entire system (all backends, proxy, and dashboard) with a single command:
-```bash
-docker-compose up --build
-```
-This will start all 4 services and map them to your host machine.
-
-> [!WARNING]
-> **Configuration Note for Docker:**
-> Since Docker runs services in their own network, `127.0.0.1` inside the Proxy container will point to itself, not the backend containers. For local testing with Docker, you will need to change `proxy/config.json` to point to `http://backend-stable:5001` and `http://backend-test:5002` instead of `http://127.0.0.1:5001`.
+> A modern reverse proxy with real-time error rate tracking, automatic canary/test backend rollback, request logging, and a management dashboard.
 
 ---
 
-## Running the System (Manual)
+## 📖 Table of Contents
 
-Start in 3 separate terminals:
+- [About the Project](#about-the-project)
+- [Key Features](#key-features)
+- [System Architecture](#system-architecture)
+- [Project Directory Structure](#project-directory-structure)
+- [Getting Started & Installation](#getting-started--installation)
+- [Running the Application](#running-the-application)
+- [API Reference](#api-reference)
+- [Traffic Routing & Modes](#traffic-routing--modes)
+- [Auto-Rollback Mechanism](#auto-rollback-mechanism)
+- [Testing the Setup](#testing-the-setup)
+- [Contributing](#contributing)
+- [License](#license)
 
-**Terminal 1 - Proxy**
-```bash
-cd proxy
-npm start
+---
+
+## 🔍 About the Project
+
+**LogWatch-AI** is a robust and intelligent reverse proxy and traffic routing system designed to monitor downstream microservice health. It actively tracks request success rates and dynamically routes traffic between stable and experimental/canary backend deployments. If the failure rate of the test backend exceeds a safe threshold, the proxy initiates an automatic rollback to production-stable servers, ensuring high availability and minimizing client impact.
+
+The system consists of:
+1. **Proxy Server**: The routing gateway with active telemetry.
+2. **Stable Backend**: Production-ready service instance.
+3. **Test Backend**: Experimental service instance with simulated failures.
+4. **Dashboard**: An interactive management front-end for real-time monitoring.
+
+---
+
+## ✨ Key Features
+
+- 📈 **Real-Time Error Rate Tracking**: Measures error rates dynamically over a rolling window of the last 100 requests.
+- 🔄 **Automated Rollback/Failover**: Safe-guard mechanism that triggers auto-rollback to the stable version when the error rate exceeds 20%.
+- 🛣️ **Flexible Traffic Modes**:
+  - `stable`: 100% traffic to the stable production server.
+  - `test`: 100% traffic to the experimental testing server.
+  - `canary`: Configurable split routing (e.g. 90% stable, 10% test).
+- 📜 **Structured Logging**: Request logs stored in JSON format with a daily rotation system.
+- 🖥️ **Web Dashboard**: Modern UI interface to visualize request stats, health indicators, config, and rollback logs.
+
+---
+
+## 🛠️ System Architecture
+
+```mermaid
+graph TD
+    Client[Client Browser / API Client] -->|HTTP Requests| Proxy[LogWatch-AI Proxy: Port 4000]
+    Proxy -->|stable Mode| StableBE[Stable Backend: Port 5001]
+    Proxy -->|test Mode| TestBE[Test Backend: Port 5002]
+    Proxy -->|canary Mode| Split{Canary Split?}
+    Split -->|90%| StableBE
+    Split -->|10%| TestBE
+    Dashboard[React Dashboard] <-->|Monitoring & Config APIs| Proxy
 ```
-Runs on port 4000
 
-**Terminal 2 - Stable Backend**
+---
+
+## 📁 Project Directory Structure
+
+```text
+LogWatch-AI/
+├── proxy/               # Reverse proxy core, logging, auto-rollback logic
+├── backend-stable/      # Production-stable backend (0% failure rate)
+├── backend-test/        # Testing/canary backend (40% simulated failure rate)
+├── dashboard/           # React front-end application
+├── package.json         # Root workspace configurations
+└── README.md            # Project documentation
+```
+
+---
+
+## 🚀 Getting Started & Installation
+
+### Prerequisites
+
+Ensure you have [Node.js](https://nodejs.org/) (v16+ recommended) and `npm` installed.
+
+### Installation
+
+Clone the repository and install all dependencies in each respective project directory:
+
 ```bash
+# 1. Install root dependencies (if any)
+npm install
+
+# 2. Install proxy dependencies
+cd proxy && npm install
+
+# 3. Install backend dependencies
+cd ../backend-stable && npm install
+cd ../backend-test && npm install
+
+# 4. Install dashboard dependencies
+cd ../dashboard && npm install
+```
+
+---
+
+## 🏃 Running the Application
+
+To run the full suite, you need to spin up the services in separate terminal windows:
+
+### Step 1: Start the Backend Services
+```bash
+# Terminal 1 - Stable Backend (Runs on Port 5001)
 cd backend-stable
 npm start
-```
-Runs on port 5001 (0% failure rate)
 
-**Terminal 3 - Test Backend**
-```bash
+# Terminal 2 - Test Backend (Runs on Port 5002)
 cd backend-test
 npm start
 ```
-Runs on port 5002 (40% failure rate)
 
-## Testing
+### Step 2: Start the Proxy Server
+```bash
+# Terminal 3 - Proxy Server (Runs on Port 4000)
+cd proxy
+npm start
+```
 
-### Test 1: Check System Status
+### Step 3: Start the Management Dashboard (Optional)
+```bash
+# Terminal 4 - React Dashboard (Runs on Port 5173 / 3000)
+cd dashboard
+npm start
+```
+
+---
+
+## 📡 API Reference
+
+All requests to the system should go through the **Proxy (Port 4000)**:
+
+### Telemetry & Control Endpoints
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/stats` | Retrieve current error rates and performance metrics |
+| `GET` | `/api/logs` | Today's structured request logs |
+| `GET` | `/api/health` | Overall system health status |
+| `GET` | `/api/config` | Read current active routing configuration |
+| `POST` | `/api/config` | Change mode or canary weight. Body: `{"mode":"stable"}` or `{"mode":"canary","canary_percent":15}` |
+| `GET` | `/api/rollback-history` | List of historical automated rollback events |
+| `POST` | `/api/rollback` | Manually trigger a rollback to `stable` mode |
+| `POST` | `/api/reset-stats` | Reset the error tracking statistics |
+
+---
+
+## ⚙️ Configuration
+
+The proxy configuration is located in `proxy/config.json`:
+
+```json
+{
+  "mode": "stable",
+  "stable_url": "http://127.0.0.1:5001",
+  "test_url": "http://127.0.0.1:5002",
+  "canary_percent": 10
+}
+```
+
+- **`mode`**: Routing configuration (must be `"stable"`, `"test"`, or `"canary"`).
+- **`canary_percent`**: The percentage of traffic routed to the `test` backend when in `"canary"` mode.
+
+---
+
+## 🛡️ Auto-Rollback Mechanism
+
+When the proxy is configured to route traffic to the **Test** or **Canary** modes, it continually evaluates client request results. If the percentage of errors exceeds the configured maximum threshold, it automatically updates `proxy/config.json` to revert to `stable` mode.
+
+By default, this threshold is set to **20%** of requests within the rolling window. You can change this in `proxy/server.js`:
+```javascript
+// Modify the constructor argument to set a custom threshold percentage
+const autoRollback = new AutoRollback(20); 
+```
+
+---
+
+## 🧪 Testing the Setup
+
+You can verify the proxy features using `curl` or any API client:
+
+### 1. Check System Statistics
 ```bash
 curl http://127.0.0.1:4000/api/stats
 ```
 
-### Test 2: Make Requests (Stable Mode)
+### 2. Make Batch Requests (Verify Stable Mode)
 ```bash
 for i in {1..5}; do
   curl http://127.0.0.1:4000/api
@@ -102,254 +199,33 @@ for i in {1..5}; do
 done
 ```
 
-### Test 3: View Logs
-```bash
-curl http://127.0.0.1:4000/api/logs
-```
+### 3. Trigger Auto-Rollback
+1. Modify `proxy/config.json` to set `"mode": "test"`.
+2. Generate 50 test requests:
+   ```bash
+   for i in {1..50}; do
+     curl http://127.0.0.1:4000/api 2>/dev/null
+     sleep 0.1
+   done
+   ```
+3. Monitor your proxy terminal for an automated rollback message.
+4. Verify that the configuration was automatically rolled back:
+   ```bash
+   curl http://127.0.0.1:4000/api/config
+   ```
 
-### Test 4: Trigger Auto-Rollback
-1. Edit `proxy/config.json`: change `"mode": "stable"` to `"mode": "test"`
-2. Make 50 requests:
-```bash
-for i in {1..50}; do
-  curl http://127.0.0.1:4000/api 2>/dev/null
-  sleep 0.1
-done
-```
-3. Watch Terminal 1 for auto-rollback message
-4. Check config was auto-updated: `curl http://127.0.0.1:4000/api/config`
-
-### Test 5: Check Rollback History
-```bash
-curl http://127.0.0.1:4000/api/rollback-history
-```
-
-## Configuration
-
-Edit `proxy/config.json`:
-```json
-{
-  "mode": "stable",           // stable, test, or canary
-  "stable_url": "http://127.0.0.1:5001",
-  "test_url": "http://127.0.0.1:5002",
-  "canary_percent": 10        // % of traffic to test in canary mode
-}
-```
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/stats | Current error rate and metrics |
-| GET | /api/logs | Today's request logs |
-| GET | /api/config | Current configuration |
-| POST | /api/config | Change mode (send `{"mode":"stable"}`) |
-| GET | /api/health | System health status |
-| GET | /api/rollback-history | Past rollback events |
-| POST | /api/rollback | Manual rollback trigger |
-| POST | /api/reset-stats | Reset statistics |
-
-## Modes
-
-**Stable** - All traffic to production backend (port 5001)
-**Test** - All traffic to test backend (port 5002, 40% failures)
-**Canary** - 90% to stable, 10% to test (configurable percentage)
-
-## Auto-Rollback
-
-System automatically switches to stable mode when error rate exceeds 20%.
-
-Threshold can be changed in `proxy/server.js`:
-
-```javascript
-const autoRollback = new AutoRollback(20);  // Change 20 to desired threshold
-## Features
-```
-- Real-time error rate tracking (last 100 requests)
-- Automatic failover when errors exceed threshold
-- JSON-based request logging with daily rotation
-- RESTful API for monitoring and control
-- Professional logging with [INFO], [ERROR], [SUCCESS], [ALERT] tags
-
-## Files
-
-- `proxy/server.js` - Main proxy server
-- `proxy/enhanced-logger.js` - Request logging system
-- `proxy/error-tracker.js` - Error rate tracking
-- `proxy/auto-rollback.js` - Automatic failover logic
-- `proxy/config.json` - Configuration file
-- `backend-stable/server.js` - Stable backend
-- `backend-test/server.js` - Test backend
+---
 
 ## 🤝 Contributing
 
-We welcome contributions from developers of all skill levels! Whether you're fixing bugs, improving documentation, or adding features — your help is appreciated 🚀
+Contributions to LogWatch-AI are welcome! Please follow these guidelines:
+1. **Fork** the repository and create your feature branch.
+2. Ensure your changes follow consistent formatting and style patterns.
+3. Verify that all dependencies install cleanly via `npm install`.
+4. Open a Pull Request with a clear explanation of your improvements.
 
-## 🆕 Adding New Features / Modules
-Fork the repository
+---
 
-Create a new branch:
+## 📄 License
 
-git checkout -b feature/your-feature-name
-Implement your feature
-Ensure everything works as expected
-
-Commit your changes:
-
-git commit -m "Add: short description of feature"
-Push to your fork and open a Pull Request
-
-
-## 🐛 Bug Fixes & Improvements
-Fork the repository
-Create a branch:
-git checkout -b fix/issue-name
-Fix the issue
-Test thoroughly
-Submit a Pull Request with a clear description
-
-
-## 🧠 AI / Log Analysis Contributions
-You can also contribute by improving the AI capabilities of the platform:
-Enhance RAG pipelines
-Improve log parsing & anomaly detection
-Optimize AI agent decision-making
-Add new recovery or rollback strategies
-
-
-## 📝 Documentation Contributions
--Good documentation is just as important as code!
-
--Improve README clarity
-
--Add architecture explanations
-
--Fix typos or formatting
-
--Provide setup or deployment guides
-
-
-## 📋 Contribution Guidelines
-
--Follow the existing project structure
-
--Write clean, readable, and modular code
-
--Add comments where necessary
-
--Keep commits meaningful and concise
-
--Update documentation when required
-
-
-## 🧪 Testing Guidelines
-Before submitting your PR, make sure:
-
--✅ The project runs without errors
-
--✅ Logs and monitoring features work correctly
-
--✅ AI-based detection behaves as expected
-
--✅ Rollback/recovery triggers properly
-
--✅ No breaking changes are introduced
-
-
-## 🌐 Browser & Environment Compatibility
-
-This project includes dashboards and UI components that should work across modern environments.
-
-✅ Recommended Browsers
-
--Google Chrome
-
--Mozilla Firefox
-
--Microsoft Edge
-
--Safari
-
-
-## 📱 Responsive Testing
-
-Ensure your changes work across:
-
--Desktop 💻
-
--Tablet 📱
-
--Mobile 📲
-
-Helpful tools:
-
--Chrome DevTools Device Toolbar
-
--Firefox Responsive Mode
-
-
-## 🛠 Common Issues
-Some problems may arise due to:
-
--Cached assets
-
--Browser-specific rendering
-
--Unsupported APIs
-
--Extension conflicts
-
-
-## 🔍 Troubleshooting Checklist
-If something doesn’t work:
-
--Hard refresh (Ctrl + Shift + R)
-
--Clear cache
-
--Use Incognito mode
-
--Disable extensions
-
--Check console for errors
-
-
-## 📌 Before Submitting a PR
-Make sure:
-
--✅ Code is tested
-
--✅ UI is responsive
-
--✅ Features work as intended
-
--✅ No console errors
-
--✅ Documentation is updated
-
-
-## 🆘 Need Help?
-If you have questions, ideas, or run into issues, feel free to reach out:
-
--💬 Discussions: Use GitHub Discussions to ask questions or share ideas
-
--🐛 Bug Reports: Open an Issue to report bugs or request features
-
--📧 Direct Contact: For any queries, simply create an issue — we’ll respond as soon as possible
-
-## 🌟 Stay Connected
-
--💼 LinkedIn: Kumari Lucky Raj
-
--🐙 GitHub: kumariluckyraj
-
-## ⭐ Show Your Support
-If this project helped you, please consider:
-
--⭐ Starring this repository
-
--🍴 Forking it to contribute
-
--📢 Sharing it with others
-
--💖 Following for more amazing projects
+This project is licensed under the [MIT License](LICENSE).
