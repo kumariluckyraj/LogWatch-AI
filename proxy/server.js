@@ -249,7 +249,10 @@ proxy.on("proxyRes", (proxyRes, req, res) => {
 proxy.on("error", (err, req, res) => {
   console.error("❌ PROXY ERROR:", err.message);
 
+  const duration = Date.now() - (req.startTime || Date.now());
+
   errorTracker.addRequest(502);
+  metricsTracker.recordRequest(502, duration);
 
   if (!res.headersSent) {
     res.status(502).json({
