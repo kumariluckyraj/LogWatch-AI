@@ -187,7 +187,7 @@ function AIAnalysisPanel({ stats }) {
     setError('');
     setAnalysisResult(null);
     try {
-      const response = await fetch('https://logwatch-proxy.onrender.com/api/analyze', {
+      const response = await fetch('http://127.0.0.1:4000/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ logs: stats.logs }),
@@ -298,15 +298,29 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [manualRollback, setManualRollback] = useState(false);
 
+  const[metrics, setMetrics]= useState({
+    avgLatency:0,
+    maxLatency:0,
+    minLatency:0,
+    requestsPerMinute:0,
+    successRate:0,
+    failureRate:0,
+    activeBackend: "stable",
+  });
+
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const resp = await fetch('https://logwatch-proxy.onrender.com/api/stats', { method: 'GET' });
+        const resp = await fetch('http://127.0.0.1:4000/api/stats', { method: 'GET' });
         if (resp.ok) {
           const data = await resp.json();
+
+          const logsResp= await fetch("http://127.0.0.1:4000/api/logs");
+          const logsData= await logsResp.json();
           setStats(prev => ({
             ...prev,
             ...data,
+            logs: logsData.logs || [],
             errorRate: data.totalRequests > 0 ? ((data.totalErrors || 0) / data.totalRequests) * 100 : 0,
             errorCount: data.totalErrors || 0,
           }));
@@ -318,14 +332,34 @@ const Dashboard = () => {
       }
     };
 
+    const fetchMetrics= async() =>{
+      try{
+        const resp=await fetch(
+          "http://127.0.0.1:4000/api/metrics"
+        );
+        if(resp.ok){
+          const data= await resp.json();
+          console.log("METRICS URL:",resp.url);
+          console.log("METRICS DATA:",data);
+          setMetrics(data);
+        }
+      }catch(err){
+        console.error("[Metrics fetch]",err);
+      }
+    };
+
     fetchStats();
-    const interval = setInterval(fetchStats, 2000);
-    return () => clearInterval(interval);
+    fetchMetrics();
+
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchMetrics();
+    }, 2000);
   }, []);
 
   const setMode = async (newMode) => {
     try {
-      const resp = await fetch('https://logwatch-proxy.onrender.com/api/config', {
+      const resp = await fetch('http://127.0.0.1:4000/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: newMode }),
@@ -341,7 +375,7 @@ const Dashboard = () => {
   const triggerRollback = async () => {
     setManualRollback(true);
     try {
-      await fetch('https://logwatch-proxy.onrender.com/api/rollback', { method: 'POST' });
+      await fetch('http://127.0.0.1:4000/api/rollback', { method: 'POST' });
       setStats(prev => ({ ...prev, mode: 'stable' }));
     } catch (e) {
       console.error('[Rollback error]', e);
@@ -404,6 +438,47 @@ const Dashboard = () => {
         </div>
 
         <AIAnalysisPanel stats={stats} />
+
+        <div style={styles.section}>
+  <SectionHeader title="Observability Metrics" tag="LIVE" />
+
+  <div style={styles.metricsGrid}>
+    <div style={styles.metricCard}>
+      <div style={styles.metricLabel}>AVG LATENCY</div>
+      <div style={styles.metricValue}>{metrics.avgLatency}ms</div>
+    </div>
+
+    <div style={styles.metricCard}>
+      <div style={styles.metricLabel}>MAX LATENCY</div>
+      <div style={styles.metricValue}>{metrics.maxLatency}ms</div>
+    </div>
+
+    <div style={styles.metricCard}>
+      <div style={styles.metricLabel}>MIN LATENCY</div>
+      <div style={styles.metricValue}>{metrics.minLatency}ms</div>
+    </div>
+
+    <div style={styles.metricCard}>
+      <div style={styles.metricLabel}>REQ/MIN</div>
+      <div style={styles.metricValue}>{metrics.requestsPerMinute}</div>
+    </div>
+
+    <div style={styles.metricCard}>
+      <div style={styles.metricLabel}>SUCCESS RATE</div>
+      <div style={styles.metricValue}>{metrics.successRate}%</div>
+    </div>
+
+    <div style={styles.metricCard}>
+      <div style={styles.metricLabel}>FAILURE RATE</div>
+      <div style={styles.metricValue}>{metrics.failureRate}%</div>
+    </div>
+
+    <div style={styles.metricCard}>
+      <div style={styles.metricLabel}>ACTIVE BACKEND</div>
+      <div style={styles.metricValue}>{metrics.activeBackend}</div>
+    </div>
+  </div>
+</div>
 
         <div style={styles.section}>
           <SectionHeader title="Traffic Mode" tag="CONFIG" />

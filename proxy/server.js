@@ -6,6 +6,7 @@ require("dotenv").config();
 const EnhancedLogger = require("./enhanced-logger");
 const ErrorTracker = require("./error-tracker");
 const AutoRollback = require("./auto-rollback");
+const MetricsTracker = require("./metrics-tracker");
 
 const { ingestLogs } = require("./rag/ingest");
 const TriggerAgent = require("./agents/trigger-agent");
@@ -19,6 +20,7 @@ const proxy = httpProxy.createProxyServer({ changeOrigin: true });
 const logger = new EnhancedLogger();
 const errorTracker = new ErrorTracker(100);
 const autoRollback = new AutoRollback(20);
+const metricsTracker = new MetricsTracker();
 
 const triggerAgent = new TriggerAgent(errorTracker, {
   errorThreshold: 20,
@@ -81,6 +83,14 @@ app.get("/health", (req, res) => {
 
 app.get("/api/stats", (req, res) => {
   res.json(errorTracker.getStats());
+});
+
+app.get("/api/metrics",(req, res) => { 
+  const config= getConfig();
+
+  res.json({
+    ...metricsTracker.getMetrics(),activeBackend: config.mode
+  });
 });
 
 app.get("/api/logs", (req, res) => {
@@ -186,6 +196,8 @@ proxy.on("proxyRes", (proxyRes, req, res) => {
     }
 
     const duration = Date.now() - (req.startTime || Date.now());
+
+    metricsTracker.recordRequest(status, duration);
 
     // ================= LOGGING =================
     try {
