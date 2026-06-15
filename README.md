@@ -46,6 +46,7 @@ Traffic distribution
 cd proxy && npm install
 cd ../backend-stable && npm install
 cd ../backend-test && npm install
+cd .. # Return to the project root directory so Docker commands execute properly
 ```
 
 ## Running with Docker (Recommended)
