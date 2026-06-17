@@ -1,3 +1,4 @@
+const { searchCodebase } = require("./code-locator");
 const fs = require("fs");
 const path = require("path");
 
@@ -69,7 +70,14 @@ async function runPatchAgent({ analysis, stats }) {
   console.log("🛠️ PatchAgent analyzing root cause:", primaryError.cause);
 
   // Defaulting to the backend-test server.js for auto-patching demonstration
-  const targetFile = path.resolve(__dirname, "../../backend-test/server.js");
+  const searchDir = path.resolve(__dirname, "../..");
+const matches = searchCodebase(primaryError.cause, searchDir);
+
+const targetFile = matches.length > 0
+  ? matches[0]
+  : path.resolve(__dirname, "../../backend-test/server.js"); // fallback if no match found
+
+console.log("📍 CodeLocator matched:", matches.length > 0 ? matches[0] : "none, using fallback");
 
   let fileContent;
   try {

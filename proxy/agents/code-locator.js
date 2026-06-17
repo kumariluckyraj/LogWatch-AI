@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const VALID_EXTENSIONS = [".js", ".ts", ".tsx"];
+const IGNORE_DIRS = ["node_modules", ".git", "dist", "build", "coverage"];
 
 function extractKeywords(text) {
   return text
@@ -17,6 +18,7 @@ function searchCodebase(errorMessage, dir = "./") {
     const files = fs.readdirSync(currentDir);
 
     for (const file of files) {
+	if (IGNORE_DIRS.includes(file)) continue; 
       const fullPath = path.join(currentDir, file);
 
       try {
