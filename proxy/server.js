@@ -129,6 +129,119 @@ app.get("/api/ai/state", (req, res) => {
   res.json({ success: true, data: getAIState() });
 });
 
+// ================= ANALYTICS =================
+app.get("/api/analytics/volume", (req, res) => {
+  try {
+    const logs = logger.getTodayLogs();
+    if (!logs || logs.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          hourly: [],
+          daily: [],
+          severity: [],
+          services: [],
+          totalLogs: 0,
+          dateRange: { from: null, to: null },
+        },
+      });
+    }
+
+    const timestamps = logs.map(l => new Date(l.timestamp).getTime()).filter(t => !isNaN(t));
+    const minTime = Math.min(...timestamps);
+    const maxTime = Math.max(...timestamps);
+
+    // Hourly trends
+    const hourlyMap = {};
+    logs.forEach(l => {
+      const d = new Date(l.timestamp);
+      const hourKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:00`;
+      hourlyMap[hourKey] = (hourlyMap[hourKey] || 0) + 1;
+    });
+    const hourly = Object.entries(hourlyMap)
+      .map(([hour, count]) => ({ hour, count }))
+      .sort((a, b) => a.hour.localeCompare(b.hour));
+
+    // Daily trends
+    const dailyMap = {};
+    logs.forEach(l => {
+      const d = new Date(l.timestamp);
+      const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      dailyMap[dayKey] = (dailyMap[dayKey] || 0) + 1;
+    });
+    const daily = Object.entries(dailyMap)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Severity distribution
+    const severityCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+    logs.forEach(l => {
+      const code = l.statusCode || 200;
+      if (code >= 500) severityCounts.CRITICAL++;
+      else if ([429, 408].includes(code)) severityCounts.HIGH++;
+      else if (code >= 400) severityCounts.MEDIUM++;
+      else severityCounts.LOW++;
+    });
+    const severity = [
+      { name: 'Critical', value: severityCounts.CRITICAL, color: '#ff4444' },
+      { name: 'High', value: severityCounts.HIGH, color: '#f59e0b' },
+      { name: 'Medium', value: severityCounts.MEDIUM, color: '#22d3ee' },
+      { name: 'Low', value: severityCounts.LOW, color: '#00ff88' },
+    ].filter(s => s.value > 0);
+
+    // Service-wise breakdown
+    const serviceMap = {};
+    logs.forEach(l => {
+      const service = l.target?.includes('5001') ? 'Stable' : l.target?.includes('5002') ? 'Test' : 'Unknown';
+      serviceMap[service] = (serviceMap[service] || 0) + 1;
+    });
+    const services = Object.entries(serviceMap)
+      .map(([service, count]) => ({ service, count }))
+      .sort((a, b) => b.count - a.count);
+
+    res.json({
+      success: true,
+      data: {
+        hourly,
+        daily,
+        severity,
+        services,
+        totalLogs: logs.length,
+        dateRange: {
+          from: timestamps.length > 0 ? new Date(minTime).toISOString() : null,
+          to: timestamps.length > 0 ? new Date(maxTime).toISOString() : null,
+        },
+      },
+    });
+  } catch (err) {
+    console.error("Analytics error:", err.message);
+    res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
+app.post("/api/analytics/export", (req, res) => {
+  try {
+    const { type, data } = req.body;
+    let csvContent = '';
+
+    if (type === 'hourly') {
+      csvContent = 'Hour,Count\n' + data.map(row => `${row.hour},${row.count}`).join('\n');
+    } else if (type === 'daily') {
+      csvContent = 'Date,Count\n' + data.map(row => `${row.date},${row.count}`).join('\n');
+    } else if (type === 'severity') {
+      csvContent = 'Severity,Count\n' + data.map(row => `${row.name},${row.value}`).join('\n');
+    } else if (type === 'services') {
+      csvContent = 'Service,Count\n' + data.map(row => `${row.service},${row.count}`).join('\n');
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=logwatch-analytics-${type}-${Date.now()}.csv`);
+    res.send(csvContent);
+  } catch (err) {
+    res.status(500).json({ error: "Export failed" });
+  }
+});
+
 // ================= ANALYZE =================
 app.post("/api/analyze", async (req, res) => {
   console.log("🔍 AI ANALYSIS TRIGGERED");

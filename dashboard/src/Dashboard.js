@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Analytics from './Analytics';
 import LogAnalysis from './LogAnalysis';
+import LogVolumeAnalytics from './components/dashboard/LogVolumeAnalytics';
 
 function CursorBackground() {
   const canvasRef = useRef(null);
@@ -536,6 +537,7 @@ const Dashboard = () => {
           <>
             <Analytics logs={stats.logs} />
             <LogAnalysis logs={stats.logs} />
+            <LogVolumeAnalytics />
           </>
         )}
 
