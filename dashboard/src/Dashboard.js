@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Analytics from './Analytics';
 import LogAnalysis from './LogAnalysis';
+import LogVolumeAnalytics from './components/dashboard/LogVolumeAnalytics';
+import SavedSearches from './components/dashboard/SavedSearches';
 
 function CursorBackground() {
   const canvasRef = useRef(null);
@@ -384,6 +386,48 @@ const Dashboard = () => {
     }
   };
 
+  const [searchQuery, setSearchQuery] = useState({
+    text: '',
+    status: '',
+    backend: '',
+    method: '',
+  });
+
+  const applySearch = useCallback((query) => {
+    setSearchQuery(prev => ({ ...prev, ...query }));
+  }, []);
+
+  const clearSearch = () => {
+    setSearchQuery({ text: '', status: '', backend: '', method: '' });
+  };
+
+  const filteredLogs = (stats.logs || []).filter(log => {
+    if (searchQuery.text) {
+      const q = searchQuery.text.toLowerCase();
+      const searchable = [
+        log.path,
+        log.method,
+        log.ip,
+        typeof log.responseBody === 'string' ? log.responseBody : JSON.stringify(log.responseBody || ''),
+      ].join(' ').toLowerCase();
+      if (!searchable.includes(q)) return false;
+    }
+    if (searchQuery.status) {
+      if (String(log.statusCode) !== searchQuery.status) return false;
+    }
+    if (searchQuery.backend) {
+      const isStable = log.target?.includes('5001') || log.target?.includes('stable');
+      if (searchQuery.backend === 'stable' && !isStable) return false;
+      if (searchQuery.backend === 'canary' && isStable) return false;
+    }
+    if (searchQuery.method) {
+      if (log.method !== searchQuery.method.toUpperCase()) return false;
+    }
+    return true;
+  });
+
+  const hasActiveSearch = searchQuery.text || searchQuery.status || searchQuery.backend || searchQuery.method;
+
   if (loading) {
     return (
       <div style={styles.loading}>
@@ -541,12 +585,64 @@ const Dashboard = () => {
 
         {stats.logs && stats.logs.length > 0 && (
           <div style={styles.section}>
-            <SectionHeader title="Recent Requests" tag={`${stats.logs.length}`} />
+            <SectionHeader title="Recent Requests" tag={`${filteredLogs.length}`} />
+            <SavedSearches currentQuery={searchQuery} onApplySearch={applySearch} />
+            <div style={styles.searchBar}>
+              <input
+                style={styles.searchInput}
+                placeholder="Search logs..."
+                value={searchQuery.text}
+                onChange={(e) => setSearchQuery(prev => ({ ...prev, text: e.target.value }))}
+              />
+              <select
+                style={styles.searchSelect}
+                value={searchQuery.status}
+                onChange={(e) => setSearchQuery(prev => ({ ...prev, status: e.target.value }))}
+              >
+                <option value="">All Status</option>
+                <option value="200">200 OK</option>
+                <option value="301">301 Redirect</option>
+                <option value="400">400 Bad Request</option>
+                <option value="401">401 Unauthorized</option>
+                <option value="403">403 Forbidden</option>
+                <option value="404">404 Not Found</option>
+                <option value="429">429 Rate Limit</option>
+                <option value="500">500 Server Error</option>
+                <option value="502">502 Bad Gateway</option>
+                <option value="503">503 Unavailable</option>
+              </select>
+              <select
+                style={styles.searchSelect}
+                value={searchQuery.backend}
+                onChange={(e) => setSearchQuery(prev => ({ ...prev, backend: e.target.value }))}
+              >
+                <option value="">All Backends</option>
+                <option value="stable">Stable</option>
+                <option value="canary">Canary/Test</option>
+              </select>
+              <select
+                style={styles.searchSelect}
+                value={searchQuery.method}
+                onChange={(e) => setSearchQuery(prev => ({ ...prev, method: e.target.value }))}
+              >
+                <option value="">All Methods</option>
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="DELETE">DELETE</option>
+                <option value="PATCH">PATCH</option>
+              </select>
+              {hasActiveSearch && (
+                <button style={styles.searchClearBtn} onClick={clearSearch}>
+                  Clear
+                </button>
+              )}
+            </div>
             <div style={styles.tableWrap}>
               <table style={styles.table}>
                 <thead><tr>{['TIME', 'METHOD', 'PATH', 'STATUS', 'BACKEND', 'MS', 'IP', 'RESPONSE'].map(h => <th key={h} style={styles.th}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {stats.logs.map((log, i) => (
+                  {filteredLogs.map((log, i) => (
                     <tr key={i} style={{ ...styles.tr, ...(log.statusCode >= 400 ? styles.trError : {}) }}>
                       <td style={styles.td}>{new Date(log.timestamp).toLocaleTimeString()}</td>
                       <td style={{ ...styles.td, color: '#a78bfa' }}>{log.method}</td>
@@ -562,6 +658,9 @@ const Dashboard = () => {
                       </td>
                     </tr>
                   ))}
+                  {filteredLogs.length === 0 && hasActiveSearch && (
+                    <tr><td colSpan="8" style={{ ...styles.td, textAlign: 'center', color: '#4a9888' }}>No matching logs found</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -660,6 +759,10 @@ const styles = {
   rollbackInfo: { fontSize: 11, color: '#5a7888', letterSpacing: 2, fontFamily: 'monospace' },
   tableWrap: { overflowX: 'auto' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
+  searchBar: { display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' },
+  searchInput: { flex: 1, minWidth: 200, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,220,155,0.15)', color: '#8ecfbf', padding: '8px 12px', fontFamily: "'Share Tech Mono', monospace", fontSize: 12, outline: 'none' },
+  searchSelect: { background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(0,220,155,0.15)', color: '#8ecfbf', padding: '8px 10px', fontFamily: "'Share Tech Mono', monospace", fontSize: 12, outline: 'none', cursor: 'pointer' },
+  searchClearBtn: { background: 'rgba(255,51,85,0.05)', border: '1px solid rgba(255,51,85,0.2)', color: '#ff3355', padding: '8px 14px', cursor: 'pointer', fontFamily: "'Share Tech Mono', monospace", fontSize: 11, letterSpacing: 1, transition: 'all 0.2s ease' },
   th: { padding: '10px 12px', textAlign: 'left', fontFamily: "'Orbitron', monospace", fontSize: 9, letterSpacing: 2, color: '#4a9888', borderBottom: '1px solid rgba(0,220,155,0.08)', fontWeight: 400 },
   tr: { borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s' },
   trError: { background: 'rgba(255,51,85,0.04)' },
