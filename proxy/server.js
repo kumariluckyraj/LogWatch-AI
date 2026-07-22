@@ -22,11 +22,12 @@ const errorTracker = new ErrorTracker(100);
 const autoRollback = new AutoRollback(20);
 const metricsTracker = new MetricsTracker();
 
-const triggerAgent = new TriggerAgent(errorTracker, {
+const triggerAgent = new TriggerAgent(errorTracker, autoRollback, {
   errorThreshold: 20,
   minRequests: 20,
   cooldownMs: 60000,
 });
+
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
